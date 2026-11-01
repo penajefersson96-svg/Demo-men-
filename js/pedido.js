@@ -207,15 +207,11 @@
         '<p class="hint" id="regNote">' + (registered === true ? '✅ Tu pedido también quedó registrado en el restaurante.'
           : registered === false ? '⚠️ No pudimos registrarlo en el sistema del restaurante. Envía el WhatsApp: es lo que cuenta.' : 'Registrando tu pedido…') + '</p>' +
         '<a class="btn wa primary" id="doneWa" href="' + esc(url) + '" target="_blank" rel="noopener">' + O.I.chat + ' Abrir WhatsApp</a>' +
-        '<button type="button" class="btn block" id="doneEdit">Corregir mi pedido</button>' +
-        '<button type="button" class="btn block" id="doneEnd">Ya lo envié · Volver al menú</button>' +
+        '<button type="button" class="btn block" id="doneEnd">Volver al menú</button>' +
       '</section>';
     window.scrollTo(0, 0);
-    $('#doneEdit').addEventListener('click', function () { location.reload(); });
-    $('#doneEnd').addEventListener('click', function () {
-      Store.cart.clear();
-      location.href = 'index.html';
-    });
+    Store.cart.clear();                     // el pedido ya salió: el carrito queda vacío y limpio para el próximo
+    $('#doneEnd').addEventListener('click', function () { location.href = 'index.html'; });
   }
 
   /* el pedido tal como lo ve la caja y la cocina */
