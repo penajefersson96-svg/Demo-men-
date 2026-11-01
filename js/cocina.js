@@ -98,6 +98,19 @@
       (list.length ? list.map(function (o) { return card(o, kind); }).join('') : '<div class="kt-empty">' + empty + '</div>') + '</section>';
   }
 
+  /* selector de columnas (teléfono / tablet vertical): una columna a la vez */
+  var ktView = '';
+  function ktPaintSeg(c) {
+    var seg = $('#ktSeg'), board = $('#ktBoard'); if (!seg || !board) return;
+    var cnt = { todo: c.todo.length, doing: c.doing.length, done: c.done.length };
+    if (!ktView) ktView = cnt.todo ? 'todo' : cnt.doing ? 'doing' : 'todo';
+    board.dataset.show = ktView;
+    var names = { todo: 'Por empezar', doing: 'Preparando', done: 'Listos' };
+    seg.innerHTML = ['todo', 'doing', 'done'].map(function (k) {
+      return '<button type="button" data-v="' + k + '" class="' + (ktView === k ? 'on ' : '') + (k === 'todo' && cnt.todo ? 'hot' : '') + '">' + names[k] + ' <span>' + cnt[k] + '</span></button>';
+    }).join('');
+  }
+
   function paintBoard() {
     var board = $('#ktBoard'); if (!board) return;
     var c = orders();
@@ -106,6 +119,7 @@
     seen = keys;
     var pending = c.todo.length;
     document.title = (pending ? '(' + pending + ') ' : '') + 'Cocina';
+    ktPaintSeg(c);
     board.innerHTML =
       col('todo', 'Por empezar', c.todo, 'todo', 'Sin pedidos nuevos') +
       col('doing', 'En preparación', c.doing, 'doing', 'Nada en preparación') +
@@ -119,7 +133,7 @@
       '<div><b>Cocina</b><small>' + esc(c.name || '') + '</small></div></div>' +
       '<div class="cj-head-actions"><button type="button" class="cj-btn" id="ktSound">🔔 Sonido</button>' +
       '<button type="button" class="cj-btn" id="ktOut">Salir</button></div></header>' +
-      (kitchenOn() ? '<main class="kt-board" id="ktBoard"></main>' :
+      (kitchenOn() ? '<nav class="kt-seg" id="ktSeg" aria-label="Columnas"></nav><main class="kt-board" id="ktBoard"></main>' :
         '<div class="kt-off"><div>🍳</div><h2>La cocina está desactivada</h2><p>Este restaurante trabaja sin pantalla de cocina. Se activa desde el panel del administrador.</p></div>');
     $('#ktOut').onclick = function () { StaffUI.logout(); };
     $('#ktSound').onclick = function () {
@@ -128,6 +142,10 @@
       if (soundOn) beep();
     };
     if (!kitchenOn()) return;
+    $('#ktSeg').onclick = function (e) {
+      var b = e.target.closest('[data-v]'); if (!b) return;
+      ktView = b.dataset.v; paintBoard();
+    };
     $('#ktBoard').onclick = function (e) {
       var b = e.target.closest('[data-a]'); if (!b) return;
       var a = b.dataset.a;

@@ -1,0 +1,127 @@
+/* =====================================================
+   staff-responsive.css — Caja y cocina en teléfono, tablet, laptop y PC
+   Se carga DESPUÉS de caja.css y cocina.css en caja.html y cocina.html
+   ===================================================== */
+
+/* botones fáciles de tocar en pantallas táctiles */
+@media (pointer: coarse) {
+  .cj-btn { min-height: 46px; }
+  .cj-btn.sm { min-height: 40px; }
+  .cj-ic { width: 42px; height: 42px; }
+}
+
+/* ---------- TELÉFONO (hasta 640 px) ---------- */
+@media (max-width: 640px) {
+  /* cabecera compacta: logo + contadores arriba, botones a la derecha, todo en poco alto */
+  .cj-head { padding: 8px 12px; padding-top: calc(8px + env(safe-area-inset-top)); gap: 8px 10px; }
+  .cj-brand { margin-right: 0; flex: 1 1 0; min-width: 0; }
+  .cj-head-actions { flex: 0 0 auto; flex-wrap: nowrap; }
+  .cj-brand img { width: 32px; height: 32px; }
+  .cj-brand b { font-size: 16px; }
+  .cj-brand small { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+  .cj-head-actions { margin-left: auto; }
+  .cj-head .cj-btn { height: 36px; padding: 0 12px; font-size: 13px; }
+  .cj-counts { order: 3; flex: 1 1 100%; gap: 6px; }
+  .cj-count { padding: 4px 10px; font-size: 12px; }
+  .cj-count b { font-size: 14px; }
+
+  /* pestañas pegadas arriba, deslizables, con fondo para que no se mezclen al hacer scroll */
+  .cj-tabs { top: 0; padding: 8px 8px 0; gap: 4px; background: #f4efe7; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .cj-tabs::-webkit-scrollbar { display: none; }
+  .cj-tab { padding: 11px 14px; font-size: 14px; scroll-snap-align: start; }
+  .cj-main { padding: 12px; margin-bottom: 0; min-height: calc(100dvh - 120px); }
+  .cj-card { padding: 12px; }
+  .cj-card h3 { font-size: 17px; }
+  .cj-total { font-size: 20px; }
+  .cj-actions .cj-btn { flex: 1 1 100%; }          /* un botón por línea: más fácil de tocar */
+  .cj-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .cj-table { min-height: 96px; padding: 12px; }
+
+  /* ventanas como hoja desde abajo */
+  .cj-overlay { align-items: end; padding: 0; }
+  .cj-modal { max-width: none; border-radius: 20px 20px 0 0; max-height: 92dvh; padding: 20px 16px calc(20px + env(safe-area-inset-bottom)); }
+  .cj-addform { flex-wrap: wrap; }
+  .cj-addform .cj-btn { flex: 1 1 100%; }
+  .cj-line { flex-wrap: wrap; }
+  .cj-line .cj-btn { margin-left: auto; }
+  body.cj .toast { bottom: calc(16px + env(safe-area-inset-bottom)); max-width: calc(100vw - 24px); }
+
+  /* cocina: se ve una columna a la vez, con selector arriba */
+  .kt-board { padding: 10px; gap: 10px; }
+  .kt-board[data-show="todo"] .kt-col:not(.todo),
+  .kt-board[data-show="doing"] .kt-col:not(.doing),
+  .kt-board[data-show="done"] .kt-col:not(.done) { display: none; }
+  .kt-col { padding: 10px; }
+  .kt-col > h2 { display: none; }                 /* el selector ya muestra el nombre y el contador */
+  .kt-card h3 { font-size: 21px; }
+  .kt-items li { font-size: 20px; }
+  .kt-actions .cj-btn { min-height: 52px; font-size: 16px; }
+}
+
+/* selector de columnas de la cocina (solo teléfono y tablet vertical) */
+.kt-seg { display: none; }
+@media (max-width: 899px) {
+  .kt-seg { display: flex; gap: 6px; padding: 10px 10px 0; position: sticky; top: 0; z-index: 15; background: #2b211b; }
+  .kt-seg button {
+    flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; height: 46px; border-radius: 12px;
+    border: 1.5px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #fff; font: 700 14px var(--font); padding: 0 6px;
+  }
+  .kt-seg button span { background: rgba(255,255,255,.18); border-radius: 999px; min-width: 24px; height: 24px; display: grid; place-items: center; font-size: 13px; padding: 0 6px; }
+  .kt-seg button.on { background: #fff; color: var(--ink); border-color: #fff; }
+  .kt-seg button.on span { background: var(--brand); color: #fff; }
+  .kt-seg button.hot span { background: var(--brand); color: #fff; }
+}
+
+/* ---------- TABLET (641 – 1023 px) ---------- */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .cj-main { padding: 18px; }
+  .cj-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+  .cj-actions .cj-btn { flex: 1 1 180px; }
+  .cj-tab { padding: 12px 20px; font-size: 16px; }
+  .kt-board { padding: 12px; }
+  /* tablet vertical: las tres columnas en tablet horizontal; en vertical, se usa el selector de arriba */
+}
+@media (min-width: 641px) and (max-width: 899px) {
+  .kt-board[data-show="todo"] .kt-col:not(.todo),
+  .kt-board[data-show="doing"] .kt-col:not(.doing),
+  .kt-board[data-show="done"] .kt-col:not(.done) { display: none; }
+  .kt-board { grid-template-columns: minmax(0, 720px); justify-content: center; }
+  .kt-col > h2 { display: none; }
+}
+
+/* ---------- LAPTOP y PC (desde 1024 px) ---------- */
+@media (min-width: 1024px) {
+  .cj-tabs, .cj-main { max-width: 1280px; }
+  /* la lista de pendientes y delivery en dos columnas; títulos y avisos ocupan todo el ancho */
+  #cjMain { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; align-content: start; }
+  #cjMain > * { grid-column: 1 / -1; }
+  #cjMain > .cj-card { grid-column: auto; }
+  #cjMain > .cj-card.bill, #cjMain > .cj-card.call, #cjMain > .cj-card.new, #cjMain > .cj-card.ready { grid-column: auto; }
+  .cj-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+}
+@media (min-width: 1500px) {
+  .cj-tabs, .cj-main { max-width: 1560px; }
+  #cjMain { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cj-grid { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .cj-card h3 { font-size: 19px; }
+}
+
+/* cocina en pantallas grandes (TV o monitor): se usa todo el ancho y letra más grande para leer de lejos */
+@media (min-width: 1200px) {
+  .kt-board { max-width: none; padding: 18px 24px; gap: 18px; }
+  .kt-items li { font-size: 22px; }
+  .kt-card h3 { font-size: 26px; }
+  .kt-time { font-size: 16px; }
+}
+@media (min-width: 1700px) {
+  .kt-items li { font-size: 26px; }
+  .kt-card h3 { font-size: 30px; }
+  .kt-col > h2 { font-size: 21px; }
+  .kt-actions .cj-btn { height: 56px; font-size: 18px; }
+}
+/* pantalla baja (celular de lado): menos relleno */
+@media (max-height: 480px) and (orientation: landscape) {
+  .cj-head { padding-top: 6px; padding-bottom: 6px; }
+  .cj-modal { max-height: 96dvh; }
+}
+@media print { .kt-seg { display: none; } }
