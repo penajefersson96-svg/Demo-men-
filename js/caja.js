@@ -137,7 +137,7 @@
     var c = Store.config();
     app.innerHTML =
       '<header class="cj-head">' +
-        '<div class="cj-brand"><img src="' + esc(c.logo || 'img/logo.svg') + '" alt="" width="38" height="38"><div><b>Caja</b><small>' + esc(c.name) + '</small></div></div>' +
+        '<div class="cj-brand"><img src="' + esc(c.logo || 'img/logo.svg') + '" alt="" width="38" height="38"><div><b>Caja</b><small>' + esc(c.name) + ' · ' + esc((session && (session.name || session.user)) || '') + '</small></div></div>' +
         '<div class="cj-counts" id="cjCounts"></div>' +
         '<div class="cj-head-actions">' +
           '<button type="button" class="cj-btn" id="cjSound"></button>' +
@@ -162,6 +162,7 @@
 
     unsubs.push(Live.watchAll(function (all) { sessions = all || {}; paint(); }));
     unsubs.push(Live.watchShift(function (sh) { shift = sh; paint(); }));
+    if (window.CajaCierre) CajaCierre.start();
     Store.refreshRate().then(paint);
     Live.purgeOlderThan(14);                        // limpia mesas abandonadas (más de 14 horas sin actividad)
     setInterval(paint, 30000);                      // actualiza los "hace X min"
@@ -189,11 +190,17 @@
     paintHead();
 
     $('#cjTabs').innerHTML =
-      tabBtn('pend', 'Pendientes', n) + tabBtn('mesas', 'Mesas', 0) + tabBtn('turno', 'Turno de hoy', shiftNeedsSetup() ? '!' : 0);
+      tabBtn('pend', 'Pendientes', n) + tabBtn('mesas', 'Mesas', 0) + tabBtn('turno', 'Turno de hoy', shiftNeedsSetup() ? '!' : 0) +
+      (window.CajaCierre ? tabBtn('cierre', 'Cierre de caja', 0) : '');
 
     var box = $('#cjMain');
     if (tab === 'pend') box.innerHTML = pendHTML(c);
     else if (tab === 'mesas') box.innerHTML = mesasHTML();
+    else if (tab === 'cierre' && window.CajaCierre) {
+      var ae = document.activeElement;                     // no se pisa lo que la caja está escribiendo
+      if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) && box.contains(ae)) return;
+      box.innerHTML = CajaCierre.html(); if (CajaCierre.after) CajaCierre.after();
+    }
     else box.innerHTML = turnoHTML();
     refreshDetail();
   }
@@ -224,8 +231,8 @@
     c.bills.forEach(function (o) {
       html += '<section class="cj-card bill"><header><h3>🧾 ' + esc(tableLabel(o.tid)) + ' pidió la cuenta</h3><span class="cj-ago">' + ago(o.at) + '</span></header>' +
         '<div class="cj-total">' + usdBs(tableTotal(o.s)) + '</div>' + waiterChip(o.s) +
-        '<p class="cj-hint">Avisa al mesero para llevar la cuenta. Cuando paguen, libera la mesa.</p>' +
-        '<div class="cj-actions"><button type="button" class="cj-btn primary" data-a="release" data-t="' + esc(o.tid) + '">Cobrada · liberar mesa</button>' +
+        '<p class="cj-hint">Avisa al mesero para llevar la cuenta. Cuando paguen, registra el cobro.</p>' +
+        '<div class="cj-actions"><button type="button" class="cj-btn primary" data-a="pay" data-t="' + esc(o.tid) + '">💵 Cobrar</button>' +
         '<button type="button" class="cj-btn" data-a="cancel-bill" data-t="' + esc(o.tid) + '">Cancelar solicitud</button></div></section>';
     });
 
@@ -354,6 +361,8 @@
     else if (a === 'call-done') Live.dismissCall(t, 'waiter');
     else if (a === 'cancel-bill') Live.dismissCall(t, 'bill');
     else if (a === 'release') confirmRelease(t);
+    else if (a === 'pay' && window.CajaCierre) CajaCierre.openPay(t);
+    else if (window.CajaCierre && CajaCierre.onAction && CajaCierre.onAction(a, b)) { /* lo atendió el cierre de caja */ }
     else if (a === 'detail') openDetail(t);
     else if (a === 'shift-repeat') saveShift(shift.waiters, 0);
     else if (a === 'shift-add') { list.push({ id: b.dataset.id, name: b.dataset.name }); saveShift(list, cur); }
@@ -437,8 +446,9 @@
         (drafts.length ? '<p class="cj-hint">Tienen ' + drafts.reduce(function (n, i) { return n + i.qty; }, 0) + ' platos por enviar (aún no pedidos).</p>' : '') +
         '<div class="cj-total">' + usdBs(tableTotal(s)) + '</div>' +
         '<div class="cj-actions">' +
+          (window.CajaCierre && tableTotal(s) > 0 ? '<button type="button" class="cj-btn primary" data-x="pay">💵 Cobrar</button>' : '') +
           (s.calls && s.calls.waiter ? '<button type="button" class="cj-btn" data-x="call">Quitar llamado</button>' : '') +
-          '<button type="button" class="cj-btn danger" data-x="release">Liberar mesa</button></div>';
+          '<button type="button" class="cj-btn danger" data-x="release">Liberar sin cobrar</button></div>';
       $('#cjW', box).addEventListener('change', function () {
         var id = this.value, w = shiftList().filter(function (x) { return x.id === id; })[0] || (s.waiter && s.waiter.id === id ? s.waiter : null);
         Live.setWaiter(tid, w || null).then(function () { toast(w ? 'Mesero: ' + w.name : 'Sin mesero'); });
@@ -449,8 +459,16 @@
       if (b.dataset.x === 'close') closeModal();
       else if (b.dataset.x === 'call') Live.dismissCall(tid, 'waiter');
       else if (b.dataset.x === 'release') confirmRelease(tid);
+      else if (b.dataset.x === 'pay' && window.CajaCierre) CajaCierre.openPay(tid);
     };
   }
+
+  /* herramientas para js/caja-cierre.js */
+  window.CajaKit = {
+    $: $, esc: esc, toast: toast, modal: modal, closeModal: closeModal, tableLabel: tableLabel, tableTotal: tableTotal,
+    rounds: rounds, waiterName: waiterName, usdBs: usdBs, repaint: function () { paint(); },
+    session: function () { return session; }, sessions: function () { return sessions; }, tab: function () { return tab; }
+  };
 
   /* =====================================================
      Inicio

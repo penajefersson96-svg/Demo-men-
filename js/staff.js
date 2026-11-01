@@ -35,7 +35,7 @@
         '<img class="login-logo" src="' + esc(c.logo || 'img/logo.svg') + '" alt="">' +
         '<h1>' + esc(o.title || 'Acceso del personal') + '</h1>' +
         '<p class="login-sub">' + esc(c.name) + '</p>' +
-        '<label for="lUser">' + (DB.mode === 'firebase' ? 'Correo' : 'Usuario') + '</label>' +
+        '<label for="lUser">' + (DB.mode === 'firebase' ? 'Correo o usuario' : 'Usuario') + '</label>' +
         '<input id="lUser" name="user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false">' +
         '<label for="lPass">Clave</label>' +
         '<div class="pass-row"><input id="lPass" name="pass" type="password" autocomplete="current-password">' +
@@ -43,6 +43,7 @@
         '<p class="login-err" id="lErr" role="alert"></p>' +
         '<button class="btn primary block lg" type="submit" id="lBtn">Entrar</button>' +
         demo +
+        '<p id="lFirst"></p>' +
       '</form></div>';
 
     var f = document.getElementById('loginForm'), err = document.getElementById('lErr'), btn = document.getElementById('lBtn');
@@ -52,6 +53,15 @@
       i.type = i.type === 'password' ? 'text' : 'password';
       this.textContent = i.type === 'password' ? 'Ver' : 'Ocultar';
     });
+    // Firebase, primera vez: ofrece crear al administrador
+    if (DB.mode === 'firebase' && o.roles.indexOf('admin') >= 0 && Auth.firstRun) {
+      Auth.firstRun().then(function (yes) {
+        if (!yes) return;
+        var p = document.getElementById('lFirst');
+        p.innerHTML = '<button type="button" class="link-btn" id="lSetup">Primera vez: crear el administrador</button>';
+        document.getElementById('lSetup').addEventListener('click', function () { showSetup(root, o); });
+      });
+    }
     f.addEventListener('submit', function (e) {
       e.preventDefault();
       err.textContent = ''; btn.disabled = true; btn.textContent = 'Entrando…';
@@ -62,6 +72,35 @@
         btn.disabled = false; btn.textContent = 'Entrar';
         document.getElementById('lPass').select();
       });
+    });
+  }
+
+  /* Firebase: creación del primer administrador (solo se puede una vez) */
+  function showSetup(root, o) {
+    var c = Store.config();
+    root.innerHTML =
+      '<div class="login-wrap"><form class="login-card" id="setupForm" novalidate>' +
+        '<img class="login-logo" src="' + esc(c.logo || 'img/logo.svg') + '" alt="">' +
+        '<h1>Crear administrador</h1>' +
+        '<p class="login-sub">Esta cuenta controla todo el sistema. Usa un correo real tuyo.</p>' +
+        '<label for="sMail">Correo</label><input id="sMail" type="email" autocomplete="username" autocapitalize="none" spellcheck="false">' +
+        '<label for="sName">Tu nombre</label><input id="sName" type="text" autocomplete="name" maxlength="40">' +
+        '<label for="sP1">Clave (mínimo 6 caracteres)</label><input id="sP1" type="password" autocomplete="new-password">' +
+        '<label for="sP2">Repetir clave</label><input id="sP2" type="password" autocomplete="new-password">' +
+        '<p class="login-err" id="sErr" role="alert"></p>' +
+        '<button class="btn primary block lg" type="submit" id="sBtn">Crear y entrar</button>' +
+        '<p><button type="button" class="link-btn" id="sBack">← Volver</button></p>' +
+      '</form></div>';
+    var f = document.getElementById('setupForm'), err = document.getElementById('sErr'), btn = document.getElementById('sBtn');
+    document.getElementById('sBack').addEventListener('click', function () { showLogin(root, o); });
+    f.addEventListener('submit', function (e) {
+      e.preventDefault(); err.textContent = '';
+      var p1 = document.getElementById('sP1').value;
+      if (p1 !== document.getElementById('sP2').value) { err.textContent = 'Las claves no coinciden.'; return; }
+      btn.disabled = true; btn.textContent = 'Creando…';
+      Auth.createFirstAdmin({ email: document.getElementById('sMail').value, name: document.getElementById('sName').value.trim(), pass: p1 })
+        .then(function (s) { o.onReady(s); })
+        .catch(function (ex) { err.textContent = ex.message || 'No se pudo crear.'; btn.disabled = false; btn.textContent = 'Crear y entrar'; });
     });
   }
 

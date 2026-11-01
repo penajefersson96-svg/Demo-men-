@@ -43,6 +43,7 @@
   function nextWaiter() {
     var pick = null;
     return DB.update(SHIFT_COL, SHIFT_ID, function (sh) {
+      pick = null;                                  // (la transacción puede repetirse)
       if (!sh || sh.day !== dayKey() || !sh.waiters || !sh.waiters.length) return undefined;
       var n = sh.waiters.length, i = (sh.cursor || 0) % n;
       pick = sh.waiters[i];

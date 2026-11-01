@@ -12,18 +12,20 @@
          DB.update(col, id, fn)         → lee, fn(doc|null) devuelve el documento nuevo
                                           (o undefined para no cambiar nada); es atómico
          DB.remove(col, id)             → borra
-         DB.list(col)                   → promesa con { id: doc, … }
+         DB.list(col[, {field, since|before}]) → promesa con { id: doc, … } (se puede filtrar por un campo numérico)
          DB.watchDoc(col, id, cb)       → cb(doc|null) en vivo; devuelve la función para dejar de escuchar
          DB.watchCollection(col, cb)    → cb({ id: doc, … }) en vivo
 
    Auth  Usuarios del personal (admin, caja, cocina).
          Claves guardadas como hash SHA-256 de "usuario:clave".
 
-   Al final del proyecto este archivo se reemplaza por la versión de Firebase,
-   con las MISMAS funciones: ninguna pantalla cambia.
+   Con Firebase (js/firebase-engine.js) las MISMAS funciones pasan a Firestore
+   y este archivo se desactiva solo: ninguna pantalla cambia.
    ===================================================== */
 (function () {
   'use strict';
+
+  if (window.DB && window.DB.mode === 'firebase') return;   // con Firebase, este archivo no hace nada
 
   var PREFIX = 'fogon_db_';
   var watchers = [];
@@ -76,7 +78,14 @@
       var o = readCol(col); delete o[id]; writeCol(col, o); fire(col);
       return Promise.resolve();
     },
-    list: function (col) { return Promise.resolve(clone(readCol(col))); },
+    list: function (col, o) {                       // o = { field, since } o { field, before } (filtra por un campo numérico)
+      var all = clone(readCol(col));
+      if (o && o.field) Object.keys(all).forEach(function (k) {
+        var v = all[k][o.field] || 0;
+        if ((o.since != null && v < o.since) || (o.before != null && v >= o.before)) delete all[k];
+      });
+      return Promise.resolve(all);
+    },
 
     watchDoc: function (col, id, cb) {
       var unsub = addWatcher({ col: col, id: id, fn: cb });

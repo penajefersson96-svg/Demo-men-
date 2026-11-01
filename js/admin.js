@@ -546,7 +546,7 @@
       '<div class="panel" id="staffBox"></div>' +
       '<div class="panel"><h3>Fotos (imgBB)</h3><p class="help">Para subir fotos de los platos se usa imgBB (gratis). Crea una cuenta en imgbb.com, entra a <b>api.imgbb.com</b> y copia tu clave API aquí.</p>' +
       '<div class="actions"><input type="password" id="ibK" placeholder="Clave API de imgBB" autocomplete="off" style="flex:1;min-width:200px;height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;font-size:16px"><button class="btn primary" id="ibS">Guardar clave</button></div>' +
-      '<p class="help" style="margin-top:10px">Sin clave, en modo de prueba las fotos se guardan dentro del navegador (pocas y pequeñas).</p></div>' +
+      '<p class="help" style="margin-top:10px">' + (DB.mode === 'firebase' ? 'Las fotos <b>no se guardan en Firebase</b>: van a imgBB y en Firebase solo queda el enlace. Así el plan gratuito no se llena.' : 'Sin clave, en modo de prueba las fotos se guardan dentro del navegador (pocas y pequeñas).') + '</p></div>' +
       '<div class="panel"><h3>Respaldo</h3><p class="help">Descarga una copia de tu menú (platos, categorías, mesas y ajustes) o restáurala.</p>' +
       '<div class="actions"><button class="btn" id="bkOut">⬇️ Descargar respaldo</button><button class="btn" id="bkIn">⬆️ Restaurar respaldo</button><input type="file" id="bkFile" accept="application/json,.json" hidden>' +
       '<button class="btn danger" id="bkReset">Restablecer menú de ejemplo</button></div></div>';
@@ -572,7 +572,7 @@
       const paintStaff = () => Auth.listStaff().then(list => {
         $('#demoWarn').innerHTML = list.some(u => u.demoPass)
           ? '<div class="warn-box"><b>Cambia las claves de demostración</b> (admin123, caja123, cocina123) antes de entregar el sistema al restaurante.</div>' : '';
-        sb.innerHTML = '<h3>Equipo</h3><p class="help">Usuarios que pueden entrar a la caja y a la cocina.</p>' +
+        sb.innerHTML = '<h3>Equipo</h3><p class="help">Usuarios que pueden entrar a la caja y a la cocina.' + (DB.mode === 'firebase' ? ' Pueden ser un correo o un nombre corto (ej: caja2).' : '') + '</p>' +
           '<table class="staff"><thead><tr><th>Usuario</th><th>Rol</th><th></th></tr></thead><tbody>' +
           list.map(u => '<tr data-u="' + esc(u.user) + '"><td><b>' + esc(u.user) + '</b><br><small style="color:var(--muted)">' + esc(u.name || '') + '</small></td><td>' + esc(ROLE_NAMES[u.role] || u.role) + '</td>' +
             '<td style="text-align:right;white-space:nowrap"><button class="btn sm" data-pw>Clave</button> <button class="btn sm danger" data-rm>Quitar</button></td></tr>').join('') +
@@ -590,7 +590,7 @@
           ev.preventDefault();
           const o = u ? { user: u.user, role: u.role, name: u.name, pass: $('#sP', m.el).value }
             : { user: $('#sU', m.el).value, name: $('#sNm', m.el).value.trim(), role: $('#sR', m.el).value, pass: $('#sP', m.el).value };
-          Auth.saveStaff(o).then(() => { m.close(); toast('Usuario guardado ✓'); paintStaff(); }).catch(ex => { $('#sE', m.el).textContent = ex.message; });
+          Auth.saveStaff(o).then(r => { m.close(); toast((r && r.message) || 'Usuario guardado ✓'); paintStaff(); }).catch(ex => { $('#sE', m.el).textContent = ex.message; });
         };
       };
       paintStaff().then(() => {});
@@ -658,6 +658,11 @@
     $('.a-nav-in').onclick = e => { const b = e.target.closest('.a-tab'); if (b) show(b.dataset.t); };
     let t = 'platos'; try { t = sessionStorage.getItem('fogon_admin_tab') || t; } catch (e) {}
     show(t);
+    // Firebase: si todavía no existe el menú en la nube, se publica el de ejemplo para poder editarlo
+    // limpieza: los resúmenes de cierre de caja más viejos que closingRetentionDays (por defecto 395 días ≈ 13 meses)
+    const keepDays = Number(Store.config().closingRetentionDays) || 395;
+    DB.list('closings', { field: 'to', before: Date.now() - keepDays * 86400000 }).then(m => Object.keys(m || {}).forEach(k => DB.remove('closings', k))).catch(() => {});
+    if (DB.mode === 'firebase') DB.get('menu', 'main').then(d => { if (!d) Store.update(() => {}); }).catch(() => {});
   }
 
   /* herramientas para las pestañas extra (js/admin-extra.js) */

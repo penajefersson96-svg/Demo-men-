@@ -8,7 +8,7 @@
    • NO guarda pedidos, mesas ni datos de clientes: eso nunca pasa por aquí.
    • Cuando cambies muchos archivos, sube el número de VERSION para limpiar lo viejo.
    ===================================================== */
-var VERSION = 'fogon-v1';
+var VERSION = 'fogon-v3';
 var SHELL = VERSION + '-shell';
 var IMGS = VERSION + '-img';
 var FONTS = VERSION + '-fonts';
@@ -16,9 +16,9 @@ var FONTS = VERSION + '-fonts';
 var FILES = [
   './', 'index.html', 'carrito.html', 'pedido.html', 'admin.html', 'caja.html', 'cocina.html',
   'manifest.json', 'manifest-admin.json', 'manifest-caja.json', 'manifest-cocina.json',
-  'css/styles.css', 'css/pedido.css', 'css/mesa.css', 'css/admin.css', 'css/admin-extra.css', 'css/caja.css', 'css/cocina.css',
-  'js/data.js', 'js/backend.js', 'js/store.js', 'js/live.js', 'js/viewport.js', 'js/menu.js', 'js/mesa.js',
-  'js/cart.js', 'js/pedido.js', 'js/order.js', 'js/staff.js', 'js/caja.js', 'js/cocina.js',
+  'css/styles.css', 'css/pedido.css', 'css/mesa.css', 'css/admin.css', 'css/admin-extra.css', 'css/caja.css', 'css/caja-cierre.css', 'css/cocina.css',
+  'js/data.js', 'js/firebase-config.js', 'js/firebase-engine.js', 'js/backend.js', 'js/store.js', 'js/live.js', 'js/viewport.js', 'js/menu.js', 'js/mesa.js',
+  'js/cart.js', 'js/pedido.js', 'js/order.js', 'js/staff.js', 'js/caja.js', 'js/caja-cierre.js', 'js/cocina.js',
   'js/admin.js', 'js/admin-extra.js', 'js/menu-import.js', 'js/imgbb.js', 'js/vendor/qrcode.js', 'js/pwa.js',
   'img/logo.svg', 'img/placeholder.svg',
   'img/icons/icon-192.png', 'img/icons/icon-512.png'
