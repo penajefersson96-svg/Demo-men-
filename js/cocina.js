@@ -16,7 +16,7 @@
     });
   }
 
-  var app, session = null, sessions = {}, unsub = null, timer = null;
+  var app, session = null, sessions = {}, deliveries = {}, unsub = null, timer = null;
   var soundOn = false, actx = null, seen = null;
 
   function toast(msg) {
@@ -47,6 +47,14 @@
         else out.done.push(o);
       });
     });
+    /* pedidos de delivery confirmados por la caja */
+    Object.keys(deliveries).forEach(function (id) {
+      var d = deliveries[id];
+      if (['accepted', 'cooking', 'ready'].indexOf(d.status) < 0) return;
+      var o = { tid: null, del: d, s: {}, r: { n: 0, status: d.status, at: d.acceptedAt || d.at,
+        items: (d.items || []).map(function (i) { return { name: i.name, qty: i.qty }; }) } };
+      (d.status === 'accepted' ? out.todo : d.status === 'cooking' ? out.doing : out.done).push(o);
+    });
     ['todo', 'doing'].forEach(function (k) { out[k].sort(function (a, b) { return (a.r.at || 0) - (b.r.at || 0); }); });
     out.done.sort(function (a, b) { return (b.r.at || 0) - (a.r.at || 0); });
     return out;
@@ -70,17 +78,18 @@
     var cls = 'kt-card' + (kind === 'done' ? ' is-ready' : m >= 25 ? ' alert' : m >= 12 ? ' late' : '');
     var plates = o.r.items.reduce(function (n, i) { return n + i.qty; }, 0);
     var btns = '';
-    var d = 'data-t="' + esc(o.tid) + '" data-r="' + o.r.n + '"';
+    var d = o.del ? 'data-del="' + esc(o.del.id) + '"' : 'data-t="' + esc(o.tid) + '" data-r="' + o.r.n + '"';
     if (kind === 'todo') btns = '<button type="button" class="cj-btn primary lg" data-a="cooking" ' + d + '>Empezar a preparar</button>';
     else if (kind === 'doing') btns = '<button type="button" class="cj-btn back" data-a="accepted" ' + d + ' title="Devolver a «Por empezar»">↩</button>' +
       '<button type="button" class="cj-btn primary lg" data-a="ready" ' + d + '>✔ Terminado</button>';
     else btns = '<button type="button" class="cj-btn sm" data-a="cooking" ' + d + '>↩ Volver a preparación</button>';
-    return '<article class="' + cls + '"><header><h3>' + esc(tableLabel(o.tid)) + '<small>Ronda ' + o.r.n + '</small></h3>' +
+    if (o.del) cls += ' is-delivery';
+    return '<article class="' + cls + '"><header><h3>' + (o.del ? '🛵 Delivery <small>#' + esc(o.del.code) + '</small>' : esc(tableLabel(o.tid)) + '<small>Ronda ' + o.r.n + '</small>') + '</h3>' +
       '<span class="kt-time">' + (kind === 'done' ? 'listo' : m < 1 ? 'ahora' : m + ' min') + '</span></header>' +
       '<ul class="kt-items">' + o.r.items.map(function (i) {
         return '<li><b>' + i.qty + '×</b><span>' + esc(i.name) + '</span></li>';
       }).join('') + '</ul>' +
-      '<div class="kt-meta">' + plates + (plates === 1 ? ' plato' : ' platos') + (o.s.waiter ? ' · Mesero: ' + esc(o.s.waiter.name) : '') + '</div>' +
+      '<div class="kt-meta">' + plates + (plates === 1 ? ' plato' : ' platos') + (o.del ? ' · para llevar' : o.s.waiter ? ' · Mesero: ' + esc(o.s.waiter.name) : '') + '</div>' +
       '<div class="kt-actions">' + btns + '</div></article>';
   }
 
@@ -92,7 +101,7 @@
   function paintBoard() {
     var board = $('#ktBoard'); if (!board) return;
     var c = orders();
-    var keys = c.todo.map(function (o) { return o.tid + ':' + o.r.n; });
+    var keys = c.todo.map(function (o) { return o.del ? 'del:' + o.del.id : o.tid + ':' + o.r.n; });
     if (seen && keys.some(function (k) { return seen.indexOf(k) < 0; })) beep();
     seen = keys;
     var pending = c.todo.length;
@@ -122,11 +131,13 @@
     $('#ktBoard').onclick = function (e) {
       var b = e.target.closest('[data-a]'); if (!b) return;
       var a = b.dataset.a;
-      Live.setRoundStatus(b.dataset.t, Number(b.dataset.r), a).then(function () {
+      var job = b.dataset.del ? Delivery.setStatus(b.dataset.del, a) : Live.setRoundStatus(b.dataset.t, Number(b.dataset.r), a);
+      job.then(function () {
         toast(a === 'ready' ? 'Listo · la caja avisa al mesero' : a === 'cooking' ? 'En preparación' : 'Devuelto a «Por empezar»');
       });
     };
     unsub = Live.watchAll(function (all) { sessions = all || {}; paintBoard(); });
+    if (window.Delivery) Delivery.watchAll(function (all) { deliveries = all || {}; paintBoard(); });
     timer = setInterval(paintBoard, 30000);            // refresca los minutos de espera
   }
 

@@ -1,0 +1,7 @@
+/* caja-delivery.css — pestaña Delivery */
+.dl-who { font-size: 17px; margin-bottom: 4px; }
+.dl-who a, .dl-addr a { color: var(--brand-dark); font-weight: 700; }
+.dl-addr { color: var(--ink); margin-bottom: 8px; font-size: 15px; }
+.dl-note { background: #fff3d6; color: #6d4700; border-radius: 10px; padding: 8px 10px; margin: 6px 0; font-size: 14px; }
+.dl-wait { margin: 0 8px 0 0; align-self: center; flex: 1 1 100%; }
+.cj-card.dl .cj-actions .cj-btn { flex: 1 1 150px; }

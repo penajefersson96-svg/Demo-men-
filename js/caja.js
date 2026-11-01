@@ -163,6 +163,7 @@
     unsubs.push(Live.watchAll(function (all) { sessions = all || {}; paint(); }));
     unsubs.push(Live.watchShift(function (sh) { shift = sh; paint(); }));
     if (window.CajaCierre) CajaCierre.start();
+    if (window.CajaDelivery) CajaDelivery.start();
     Store.refreshRate().then(paint);
     Live.purgeOlderThan(14);                        // limpia mesas abandonadas (más de 14 horas sin actividad)
     setInterval(paint, 30000);                      // actualiza los "hace X min"
@@ -185,17 +186,19 @@
     if (!$('#cjMain')) return;
     var c = collect();
     detectNew(c);
-    var n = pendingCount(c);
-    document.title = (n ? '(' + n + ') ' : '') + 'Caja';
+    var n = pendingCount(c), dn = window.CajaDelivery ? CajaDelivery.pending() : 0;
+    document.title = (n + dn ? '(' + (n + dn) + ') ' : '') + 'Caja';
     paintHead();
 
     $('#cjTabs').innerHTML =
       tabBtn('pend', 'Pendientes', n) + tabBtn('mesas', 'Mesas', 0) + tabBtn('turno', 'Turno de hoy', shiftNeedsSetup() ? '!' : 0) +
+      (window.CajaDelivery ? tabBtn('delivery', '🛵 Delivery', dn) : '') +
       (window.CajaCierre ? tabBtn('cierre', 'Cierre de caja', 0) : '');
 
     var box = $('#cjMain');
     if (tab === 'pend') box.innerHTML = pendHTML(c);
     else if (tab === 'mesas') box.innerHTML = mesasHTML();
+    else if (tab === 'delivery' && window.CajaDelivery) box.innerHTML = CajaDelivery.html();
     else if (tab === 'cierre' && window.CajaCierre) {
       var ae = document.activeElement;                     // no se pisa lo que la caja está escribiendo
       if (ae && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) && box.contains(ae)) return;
@@ -362,6 +365,7 @@
     else if (a === 'cancel-bill') Live.dismissCall(t, 'bill');
     else if (a === 'release') confirmRelease(t);
     else if (a === 'pay' && window.CajaCierre) CajaCierre.openPay(t);
+    else if (window.CajaDelivery && CajaDelivery.onAction(a, b)) { /* lo atendió el delivery */ }
     else if (window.CajaCierre && CajaCierre.onAction && CajaCierre.onAction(a, b)) { /* lo atendió el cierre de caja */ }
     else if (a === 'detail') openDetail(t);
     else if (a === 'shift-repeat') saveShift(shift.waiters, 0);
@@ -465,7 +469,7 @@
 
   /* herramientas para js/caja-cierre.js */
   window.CajaKit = {
-    $: $, esc: esc, toast: toast, modal: modal, closeModal: closeModal, tableLabel: tableLabel, tableTotal: tableTotal,
+    $: $, esc: esc, toast: toast, beep: beep, modal: modal, closeModal: closeModal, tableLabel: tableLabel, tableTotal: tableTotal,
     rounds: rounds, waiterName: waiterName, usdBs: usdBs, repaint: function () { paint(); },
     session: function () { return session; }, sessions: function () { return sessions; }, tab: function () { return tab; }
   };

@@ -62,16 +62,17 @@
   }
 
   function totals(list) {
-    var t = { orders: 0, totalUSD: 0, totalBs: 0, by: {}, change: { usd: 0, bs: 0 }, voids: { n: 0, usd: 0 }, from: 0 };
+    var t = { orders: 0, totalUSD: 0, totalBs: 0, by: {}, change: { usd: 0, bs: 0 }, voids: { n: 0, usd: 0 }, from: 0, delivery: { n: 0, usd: 0 } };
     METHODS.forEach(function (m) { t.by[m.id] = { n: 0, amt: 0, usd: 0 }; });
     list.forEach(function (s) {
       if (s.void) { t.voids.n++; t.voids.usd += s.totalUSD; return; }
       t.orders++; t.totalUSD += s.totalUSD; t.totalBs += s.totalBs;
+      if (s.source === 'delivery') { t.delivery.n++; t.delivery.usd += s.totalUSD; }
       if (!t.from || s.at < t.from) t.from = s.at;
       (s.payments || []).forEach(function (p) { var b = t.by[p.m]; if (b) { b.n++; b.amt += p.amt; b.usd += p.usd; } });
       if (s.change && t.change[s.change.m] != null) t.change[s.change.m] += s.change.amt;
     });
-    t.totalUSD = r2(t.totalUSD); t.totalBs = r2(t.totalBs); t.voids.usd = r2(t.voids.usd);
+    t.totalUSD = r2(t.totalUSD); t.totalBs = r2(t.totalBs); t.delivery.usd = r2(t.delivery.usd); t.voids.usd = r2(t.voids.usd);
     METHODS.forEach(function (m) { t.by[m.id].amt = r2(t.by[m.id].amt); t.by[m.id].usd = r2(t.by[m.id].usd); });
     t.change.usd = r2(t.change.usd); t.change.bs = r2(t.change.bs);
     t.expected = { usd: r2(t.by.usd.amt - t.change.usd), bs: r2(t.by.bs.amt - t.change.bs) };
@@ -86,10 +87,18 @@
     if (!s) { K.toast('Esa mesa ya no está ocupada.'); return; }
     var total = r2(K.tableTotal(s));
     if (!(total > 0)) { K.toast('Esta mesa no tiene consumo. Usa «Liberar sin cobrar».'); return; }
-    var rate = Store.rate().value || 0;
+    payDialog({
+      title: 'Cobrar · ' + K.tableLabel(tid), total: total, doneMsg: 'Cobrado · ' + K.tableLabel(tid) + ' liberada',
+      onConfirm: function (got, change, rate) { return paySale(tid, total, rate, got, change); }
+    });
+  }
 
+  /* ventana de cobro (sirve para mesas y para delivery)
+     o = { title, hint, total (USD), doneMsg, onConfirm(got, change, rate) → promesa } */
+  function payDialog(o) {
+    var total = r2(o.total), rate = Store.rate().value || 0;
     var m = K.modal('<button type="button" class="cj-x" data-x="close" aria-label="Cerrar">✕</button>' +
-      '<h3>Cobrar · ' + esc(K.tableLabel(tid)) + '</h3>' +
+      '<h3>' + esc(o.title) + '</h3>' + (o.hint ? '<p class="cj-hint"><b>' + esc(o.hint) + '</b></p>' : '') +
       '<div class="pay-total"><b>' + usd(total) + '</b>' + (rate > 0 ? '<span>' + bs(total * rate) + '</span>' : '') + '</div>' +
       (rate > 0 ? '<p class="cj-hint">Tasa: Bs ' + rate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' por $1</p>'
                 : '<div class="cj-alert warn">No hay tasa del dólar. Solo puedes cobrar en dólares hasta que la pongas en el panel (pestaña Tasa).</div>') +
@@ -149,8 +158,8 @@
         change = { m: cm, amt: cm === 'usd' ? diff : r2(diff * rate) };
       }
       var btn = $('#payOk', m); btn.disabled = true; btn.textContent = 'Guardando…';
-      paySale(tid, total, rate, r, change).then(function () {
-        K.closeModal(); K.toast('Cobrado · ' + K.tableLabel(tid) + ' liberada');
+      o.onConfirm(r, change, rate).then(function () {
+        K.closeModal(); K.toast(o.doneMsg || 'Cobrado');
       }).catch(function (ex) { K.toast(ex.message || 'No se pudo registrar el cobro.'); K.closeModal(); });
     }
     $('#pay_usd', m).focus();
@@ -167,7 +176,7 @@
       id: id, tableId: String(tid), tableLabel: K.tableLabel(tid), waiter: s.waiter ? s.waiter.name : '',
       caja: { id: who.id, name: who.name }, at: Date.now(), day: Live.dayKey(), rate: rate,
       totalUSD: total, totalBs: r2(total * rate), plates: plates, payments: got.lines, receivedUSD: r2(got.got),
-      change: change, void: false
+      change: change, void: false, source: 'mesa'
     };
     var created = false;
     return DB.update('sales', id, function (cur) {
@@ -177,6 +186,26 @@
     }).then(function () {
       if (!created) throw new Error('Esta cuenta ya fue cobrada desde otra caja.');
       return Live.release(tid);
+    });
+  }
+
+  /* delivery: se cobra al entregar; la venta queda sin datos del cliente y el pedido se borra */
+  function payDelivery(d) {
+    payDialog({
+      title: 'Cobrar · Delivery #' + d.code, total: d.totalUSD, hint: d.pay ? 'El cliente indicó: ' + d.pay : '',
+      doneMsg: 'Cobrado · Delivery #' + d.code + ' entregado',
+      onConfirm: function (got, change, rate) {
+        var who = me(), id = 'v' + d.id, created = false;
+        var sale = {
+          id: id, tableId: 'delivery', tableLabel: 'Delivery #' + d.code, waiter: '', caja: { id: who.id, name: who.name }, at: Date.now(),
+          day: Live.dayKey(), rate: rate, totalUSD: r2(d.totalUSD), totalBs: r2(d.totalUSD * rate), plates: d.plates || 0,
+          payments: got.lines, receivedUSD: r2(got.got), change: change, void: false, source: 'delivery'
+        };
+        return DB.update('sales', id, function (cur) { created = false; if (cur) return undefined; created = true; return sale; }).then(function () {
+          if (!created) throw new Error('Este pedido ya fue cobrado desde otra caja.');
+          return Delivery.remove(d.id);
+        });
+      }
     });
   }
 
@@ -208,6 +237,7 @@
       h += '<div class="cc-big"><div><small>Órdenes atendidas</small><b>' + t.orders + '</b></div>' +
         '<div><small>Total en dólares</small><b>' + usd(t.totalUSD) + '</b></div>' +
         '<div><small>Total en bolívares</small><b>' + bs(t.totalBs) + '</b></div></div>' +
+        (t.delivery.n ? '<p class="cj-hint">Mesas: <b>' + (t.orders - t.delivery.n) + '</b> · Delivery: <b>' + t.delivery.n + '</b> (' + usd(t.delivery.usd) + ')</p>' : '') +
         '<div class="cc-card"><h4>Cobrado por método</h4><table class="cc-t"><thead><tr><th></th><th class="r">Recibido</th><th class="r">Equivale</th></tr></thead><tbody>' + methodRows(t) +
         '<tr class="sep"><td>Vuelto entregado</td><td class="r">' + (t.change.usd ? '−' + usd(t.change.usd) : '') + (t.change.usd && t.change.bs ? ' · ' : '') + (t.change.bs ? '−' + bs(t.change.bs) : '') + (!t.change.usd && !t.change.bs ? '—' : '') + '</td><td></td></tr>' +
         (t.voids.n ? '<tr><td>Ventas anuladas</td><td class="r">' + t.voids.n + ' · ' + usd(t.voids.usd) + '</td><td></td></tr>' : '') +
@@ -282,7 +312,7 @@
     var hasCount = String(counted.usd).trim() !== '' || String(counted.bs).trim() !== '';
     var cl = {
       id: 'c' + now + '_' + who.id, caja: who, day: Live.dayKey(), from: list[0].at, to: now,
-      orders: t.orders, totalUSD: t.totalUSD, totalBs: t.totalBs, by: t.by, change: t.change, voids: t.voids, expected: t.expected,
+      orders: t.orders, totalUSD: t.totalUSD, totalBs: t.totalBs, by: t.by, change: t.change, voids: t.voids, expected: t.expected, delivery: t.delivery,
       counted: hasCount ? { usd: String(counted.usd).trim() === '' ? null : r2(num(counted.usd)), bs: String(counted.bs).trim() === '' ? null : r2(num(counted.bs)) } : null,
       saleIds: list.map(function (s) { return s.id; }),
       lines: list.filter(function (s) { return !s.void; }).slice(0, 300).map(function (s) {
@@ -321,6 +351,7 @@
       row('Caja:', esc(c.caja.name)) + row('Fecha:', ddmm(c.to)) + row('Desde:', hhmm(c.from)) + row('Hasta:', hhmm(c.to)) +
       '<div class="rc-hr"></div>' +
       row('<b>Órdenes atendidas</b>', '<b>' + c.orders + '</b>') +
+      (c.delivery && c.delivery.n ? row('  Mesas', (c.orders - c.delivery.n)) + row('  Delivery', c.delivery.n + ' (' + usd(c.delivery.usd) + ')') : '') +
       '<div class="rc-b" style="margin-top:6px">TOTAL GENERADO</div>' +
       row('En dólares', '<b>' + usd(c.totalUSD) + '</b>') + row('En bolívares', '<b>' + bs(c.totalBs) + '</b>') +
       '<div class="rc-hr"></div><div class="rc-b">COBRADO POR MÉTODO</div>' +
@@ -358,7 +389,7 @@
   function previewClosing() {
     var list = mySales(), t = totals(list), who = me();
     if (!list.length) { K.toast('No hay ventas para imprimir.'); return; }
-    printReceipt({ caja: who, from: list[0].at, to: Date.now(), orders: t.orders, totalUSD: t.totalUSD, totalBs: t.totalBs, by: t.by, change: t.change, expected: t.expected, voids: t.voids,
+    printReceipt({ caja: who, from: list[0].at, to: Date.now(), delivery: t.delivery, orders: t.orders, totalUSD: t.totalUSD, totalBs: t.totalBs, by: t.by, change: t.change, expected: t.expected, voids: t.voids,
       counted: (String(counted.usd).trim() !== '' || String(counted.bs).trim() !== '') ? { usd: String(counted.usd).trim() === '' ? null : r2(num(counted.usd)), bs: String(counted.bs).trim() === '' ? null : r2(num(counted.bs)) } : null }, true);
   }
 
@@ -385,5 +416,5 @@
     return false;
   }
 
-  window.CajaCierre = { start: start, html: html, after: updateDiffs, openPay: openPay, onAction: onAction, _totals: totals };
+  window.CajaCierre = { start: start, html: html, after: updateDiffs, openPay: openPay, payDelivery: payDelivery, onAction: onAction, _totals: totals };
 })();

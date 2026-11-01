@@ -151,7 +151,8 @@
      Mensaje de WhatsApp
      ===================================================== */
   function orderCode(now) {
-    return now.getTime().toString(36).slice(-4).toUpperCase();
+    // solo se usa si no hay conexión para pedir el número de secuencia: 5 dígitos según la hora
+    return ('0000' + (Math.floor(now.getTime() / 1000) % 100000)).slice(-5);
   }
 
   function buildMessage(now, code) {
@@ -195,7 +196,7 @@
     if (!w) window.location.href = url;     // si el navegador bloquea la ventana nueva
   }
 
-  function showDone(url, code) {
+  function showDone(url, code, registered) {
     document.title = 'Pedido listo';
     $('#page').innerHTML =
       '<section class="box done">' +
@@ -203,6 +204,8 @@
         '<h2>¡Tu pedido está listo!</h2>' +
         '<div class="code">PEDIDO #' + esc(code) + '</div>' +
         '<p>Para terminar, <b>envía el mensaje en WhatsApp</b>. El restaurante lo confirmará por ahí.</p>' +
+        '<p class="hint" id="regNote">' + (registered === true ? '✅ Tu pedido también quedó registrado en el restaurante.'
+          : registered === false ? '⚠️ No pudimos registrarlo en el sistema del restaurante. Envía el WhatsApp: es lo que cuenta.' : 'Registrando tu pedido…') + '</p>' +
         '<a class="btn wa primary" id="doneWa" href="' + esc(url) + '" target="_blank" rel="noopener">' + O.I.chat + ' Abrir WhatsApp</a>' +
         '<button type="button" class="btn block" id="doneEdit">Corregir mi pedido</button>' +
         '<button type="button" class="btn block" id="doneEnd">Ya lo envié · Volver al menú</button>' +
@@ -213,6 +216,27 @@
       Store.cart.clear();
       location.href = 'index.html';
     });
+  }
+
+  /* el pedido tal como lo ve la caja y la cocina */
+  function buildOrder(now, code) {
+    var t = O.totals(), ls = O.lines();
+    var c = {
+      name: (form.nombre.value.trim() + ' ' + form.apellido.value.trim()).trim(),
+      phone: form.telefono.value.trim(),
+      address: form.direccion.value.trim(), detail: form.detalle.value.trim(), note: form.nota.value.trim()
+    };
+    if (gps) c.gps = { lat: gps.lat, lng: gps.lng };
+    return {
+      id: 'd' + now.getTime().toString(36) + Math.random().toString(36).slice(2, 6), code: code, at: now.getTime(), status: 'new',
+      customer: c,
+      items: ls.map(function (l) { return { id: l.dish.id, name: l.dish.name, qty: l.qty, price: l.dish.price }; }),
+      plates: t.count, subUSD: t.sub, feeUSD: t.fee, totalUSD: t.total, rate: t.rate, pay: selectedPay()
+    };
+  }
+  function setReg(ok) {
+    var n = $('#regNote'); if (!n) return;
+    n.textContent = ok ? '✅ Tu pedido también quedó registrado en el restaurante.' : '⚠️ No pudimos registrarlo en el sistema del restaurante. Envía el WhatsApp: es lo que cuenta.';
   }
 
   function onSubmit(e) {
@@ -226,11 +250,19 @@
 
     if (!isDelivery) Store.mode.set('local', form.mesa.value.trim());
 
-    var now = new Date(), code = orderCode(now);
-    var url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(buildMessage(now, code));
+    var now = new Date();
+    var win = window.open('', '_blank');      // se abre ya (el navegador lo exige dentro del toque); se llena al tener el número
+    var numP = (isDelivery && window.Delivery)
+      ? Promise.race([Delivery.nextNumber(), new Promise(function (_, no) { setTimeout(no, 6000); })]).catch(function () { return orderCode(now); })
+      : Promise.resolve(orderCode(now));
 
-    openWhatsApp(url);
-    showDone(url, code);
+    numP.then(function (code) {
+      var url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent(buildMessage(now, code));
+      var order = (isDelivery && window.Delivery) ? buildOrder(now, code) : null;   // antes de cambiar la pantalla
+      if (win && !win.closed) { try { win.location.href = url; } catch (x) { win = null; } }
+      showDone(url, code, order ? undefined : true);
+      if (order) Delivery.create(order).then(function () { setReg(true); }).catch(function () { setReg(false); });
+    });
   }
 
   /* =====================================================

@@ -43,3 +43,7 @@ body.kt .cj-head { background: #1a120d; }
 .kt-off { max-width: 520px; margin: 60px auto; text-align: center; padding: 0 20px; }
 .kt-off div { font-size: 54px; } .kt-off h2 { font-family: var(--font-display); margin: 10px 0 6px; }
 .kt-off p { color: rgba(255,255,255,.7); }
+
+.kt-card.is-delivery { border-left-color: #3b6fb6; }
+.kt-card.is-delivery.late { border-left-color: #e0a100; } .kt-card.is-delivery.alert { border-left-color: #d64545; }
+.kt-card.is-delivery h3 { color: #1d4a7a; }
