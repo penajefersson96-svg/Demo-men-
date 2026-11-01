@@ -1,0 +1,45 @@
+/* =====================================================
+   cocina.css — Pantalla de la cocina (cocina.html)
+   Usa la cabecera y los botones de caja.css
+   ===================================================== */
+body.kt { background: #2b211b; color: #fff; }
+body.kt .cj-head { background: #1a120d; }
+
+.kt-board {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+  padding: 14px; max-width: 1400px; margin: 0 auto; align-items: start;
+}
+@media (max-width: 900px) { .kt-board { grid-template-columns: 1fr; } }
+
+.kt-col { background: #362a22; border-radius: 16px; padding: 12px; min-height: 160px; }
+.kt-col > h2 {
+  display: flex; align-items: center; justify-content: space-between; margin: 2px 4px 12px;
+  font: 700 17px var(--font-display); letter-spacing: .2px;
+}
+.kt-col > h2 span { background: rgba(255,255,255,.14); border-radius: 999px; min-width: 26px; height: 26px; padding: 0 8px; display: grid; place-items: center; font: 700 13px var(--font); }
+.kt-col.todo  > h2 { color: #ffd27a; }
+.kt-col.doing > h2 { color: #ffa877; }
+.kt-col.done  > h2 { color: #7fe0a4; }
+.kt-empty { text-align: center; color: rgba(255,255,255,.45); padding: 26px 8px; font-size: 14px; }
+
+.kt-card { background: #fff; color: var(--ink); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; border-left: 8px solid #d9c9b3; }
+.kt-card.late  { border-left-color: #e0a100; }
+.kt-card.alert { border-left-color: #d64545; }
+.kt-card.is-ready { border-left-color: var(--ok); opacity: .92; }
+.kt-card header { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.kt-card h3 { font: 700 22px var(--font-display); }
+.kt-card h3 small { font: 700 13px var(--font); color: var(--muted); margin-left: 4px; }
+.kt-time { font: 700 14px var(--font); color: var(--muted); white-space: nowrap; }
+.kt-card.late .kt-time { color: #8a5a00; } .kt-card.alert .kt-time { color: #b32d2d; }
+.kt-items { list-style: none; margin: 0 0 10px; padding: 0; }
+.kt-items li { display: flex; gap: 8px; align-items: baseline; padding: 5px 0; font-size: 19px; line-height: 1.25; }
+.kt-items li + li { border-top: 1px dashed var(--line); }
+.kt-items b { color: var(--brand-dark); min-width: 34px; }
+.kt-meta { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+.kt-actions { display: flex; gap: 8px; }
+.kt-actions .cj-btn { flex: 1; }
+.kt-actions .cj-btn.back { flex: 0 0 auto; }
+
+.kt-off { max-width: 520px; margin: 60px auto; text-align: center; padding: 0 20px; }
+.kt-off div { font-size: 54px; } .kt-off h2 { font-family: var(--font-display); margin: 10px 0 6px; }
+.kt-off p { color: rgba(255,255,255,.7); }

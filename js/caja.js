@@ -320,7 +320,7 @@
     html += '</section>';
 
     var known = (Store.config().waiters || []).filter(function (w) {
-      return !list.some(function (x) { return x.id === w.id; });
+      return w.active !== false && !list.some(function (x) { return x.id === w.id; });
     });
     html += '<section class="cj-card"><header><h3>Agregar al turno</h3></header>' +
       (known.length ? '<div class="cj-chips">' + known.map(function (w) {

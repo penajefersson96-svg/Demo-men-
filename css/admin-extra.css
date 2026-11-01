@@ -1,0 +1,14 @@
+/* admin-extra.css — Importar carta */
+.im-list { display: flex; flex-direction: column; gap: 10px; }
+.im-row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 96px 170px; grid-template-areas: "on name price cat" ". desc desc desc"; gap: 8px; background: #fff; border: 1.5px solid var(--line); border-radius: 14px; padding: 10px; align-items: center; }
+.im-row.off { opacity: .45; }
+.im-row.bad { border-color: var(--bad); background: #fff7f6; }
+.im-on { grid-area: on; display: grid; place-items: center; } .im-on input { width: 22px; height: 22px; }
+.im-name { grid-area: name; } .im-price { grid-area: price; display: flex; align-items: center; gap: 4px; } .im-cat { grid-area: cat; } .im-desc { grid-area: desc; }
+.im-f input, .im-f select { width: 100%; height: 42px; border: 1.5px solid var(--line); border-radius: 10px; padding: 0 10px; font: inherit; font-size: 15px; background: #fff; min-width: 0; }
+.im-name input { font-weight: 700; }
+@media (max-width: 640px) {
+  .im-row { grid-template-columns: 34px minmax(0, 1fr) 90px; grid-template-areas: "on name price" ". cat cat" ". desc desc"; }
+}
+.im-foot { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; background: #fff; border-top: 1px solid var(--line); padding: 12px 4px calc(12px + env(safe-area-inset-bottom)); margin-top: 14px; }
+.im-foot span { color: var(--muted); font-size: 14px; }
