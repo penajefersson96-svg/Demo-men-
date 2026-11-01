@@ -106,7 +106,8 @@
     send: function (tableId) {
       return DB.get(COL, String(tableId)).then(function (cur) {
         var needs = cur && !cur.waiter && cur.items.some(function (i) { return i.status === 'draft'; });
-        return needs ? nextWaiter() : null;
+        /* si no se pudo asignar mesero (permisos, red…), el pedido igual se envía y la caja lo asigna */
+        return needs ? nextWaiter().catch(function (e) { if (window.console) console.warn('turno', e); return null; }) : null;
       }).then(function (pick) {
         return mutate(tableId, function (s) {
           var drafts = s.items.filter(function (i) { return i.status === 'draft'; });

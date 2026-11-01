@@ -70,6 +70,21 @@
     });
   });
 
+  /* en las pantallas del personal, avisa con una franja roja si Firebase no deja leer algo (reglas) */
+  function dbErr(col, e) {
+    try {
+      if (!document.body || !/\b(cj|kt)\b/.test(document.body.className)) return;
+      var box = document.getElementById('dbErr');
+      if (!box) {
+        box = document.createElement('div'); box.id = 'dbErr';
+        box.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:999;background:#b32d2d;color:#fff;font:600 13px sans-serif;padding:8px 12px;text-align:center';
+        document.body.appendChild(box); box._l = {};
+      }
+      box._l[col] = (e && e.code) || 'error';
+      box.textContent = '⚠️ Firebase no deja leer: ' + Object.keys(box._l).map(function (k) { return k + ' (' + box._l[k] + ')'; }).join(', ');
+    } catch (x) {}
+  }
+
   var DB = {
     mode: 'firebase',
     ready: authInit.then(function () {}),
@@ -98,12 +113,12 @@
       });
     },
     watchDoc: function (col, id, cb) {
-      return ref(col, id).onSnapshot(function (s) { cb(snapData(s)); }, function (e) { console.warn('watchDoc ' + col + '/' + id, e && e.code); });
+      return ref(col, id).onSnapshot(function (s) { cb(snapData(s)); }, function (e) { console.warn('watchDoc ' + col + '/' + id, e && e.code); dbErr(col, e); });
     },
     watchCollection: function (col, cb) {
       return fs.collection(col).onSnapshot(function (q) {
         var o = {}; q.forEach(function (d) { o[d.id] = d.data(); }); cb(o);
-      }, function (e) { console.warn('watchCollection ' + col, e && e.code); });
+      }, function (e) { console.warn('watchCollection ' + col, e && e.code); dbErr(col, e); });
     }
   };
 

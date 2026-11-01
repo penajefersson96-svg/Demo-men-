@@ -183,6 +183,9 @@
   function sendOrder() {
     Live.send(me.tableId).then(function (round) {
       if (round) ui.toast('Pedido enviado · esperando confirmación');
+    }).catch(function (e) {
+      ui.toast('No se pudo enviar el pedido' + (e && e.code ? ' (' + e.code + ')' : '') + '. Intenta de nuevo.');
+      if (window.console) console.warn('send', e);
     });
   }
 
