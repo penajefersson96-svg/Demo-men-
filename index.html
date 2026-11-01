@@ -1,1 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Menú digital</title>
+  <meta name="description" content="Menú digital del restaurante. Mira los platos, arma tu pedido y envíalo por WhatsApp.">
+  <meta name="theme-color" content="#c8501e">
 
+  <!-- PWA (los archivos se entregan en la Parte 4) -->
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/mesa.css">
+</head>
+<body>
+
+  <!-- Barra superior fija: nombre, lupa y carrito -->
+  <header class="topbar" id="topbar">
+    <div class="topbar-row">
+      <a class="mini-brand" href="#top" aria-label="Ir al inicio">
+        <img id="miniLogo" src="img/logo.svg" alt="" width="34" height="34">
+        <span id="miniName"></span>
+      </a>
+      <div class="topbar-actions">
+        <button class="icon-btn" id="btnMesa" type="button" aria-label="Menú de la mesa" hidden></button>
+        <button class="icon-btn" id="btnSearch" type="button" aria-label="Buscar un plato" aria-expanded="false"></button>
+        <a class="icon-btn" id="btnCart" href="carrito.html" aria-label="Ver mi pedido">
+          <span id="iconCart"></span>
+          <span class="count-dot" id="cartCount" hidden>0</span>
+        </a>
+      </div>
+    </div>
+    <div class="searchrow" id="searchRow" hidden>
+      <input id="q" type="search" placeholder="Buscar un plato…" autocomplete="off" enterkeyhint="search" aria-label="Buscar un plato">
+      <button class="link-btn" id="qClose" type="button">Cerrar</button>
+    </div>
+  </header>
+
+  <main id="top">
+    <!-- Logo, nombre, estado, dirección, redes -->
+    <section class="hero" id="hero"></section>
+
+    <!-- Panel de categorías (indica en cuál vas mientras bajas) -->
+    <nav class="catbar" id="catbar" aria-label="Categorías">
+      <div class="catscroll" id="catScroll"></div>
+    </nav>
+
+    <div id="closedBanner"></div>
+
+    <!-- Lista de platos por categoría -->
+    <div id="menu" class="menu"></div>
+    <p class="no-results" id="noResults" hidden></p>
+  </main>
+
+  <footer class="footer" id="footer"></footer>
+
+  <!-- Resumen del carrito dentro del menú -->
+  <a class="cartbar" id="cartbar" href="carrito.html" hidden>
+    <span class="cb-count" id="cbCount">0</span>
+    <span class="cb-label">Ver mi pedido</span>
+    <span class="cb-total"><b id="cbUsd"></b><small id="cbBs"></small></span>
+  </a>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/viewport.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/backend.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/live.js"></script>
+  <script src="js/menu.js"></script>
+  <script src="js/mesa.js"></script>
+</body>
+</html>

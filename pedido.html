@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Datos del pedido</title>
+  <meta name="theme-color" content="#c8501e">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/pedido.css">
+</head>
+<body class="page-order">
+
+  <header class="topbar" id="topbar"></header>
+
+  <main class="page" id="page">
+
+    <div class="mode-row">
+      <span class="mode-pill" id="modePill"></span>
+      <a class="link-btn" href="index.html?cambiar=1">Cambiar</a>
+    </div>
+    <div id="closedBanner"></div>
+
+    <form id="form" novalidate autocomplete="on">
+
+      <!-- 1. Datos del cliente -->
+      <section class="box">
+        <h2>Tus datos</h2>
+        <div class="row2">
+          <div class="field">
+            <label for="fNombre">Nombre</label>
+            <input id="fNombre" name="nombre" type="text" autocomplete="given-name" placeholder="Ej: María">
+            <p class="err" data-err="nombre"></p>
+          </div>
+          <div class="field">
+            <label for="fApellido">Apellido</label>
+            <input id="fApellido" name="apellido" type="text" autocomplete="family-name" placeholder="Ej: Pérez">
+            <p class="err" data-err="apellido"></p>
+          </div>
+        </div>
+        <div class="field">
+          <label for="fTelefono">Número de teléfono <span class="opt" id="telOpt"></span></label>
+          <input id="fTelefono" name="telefono" type="tel" inputmode="tel" autocomplete="tel" placeholder="Ej: 0414 1234567">
+          <p class="err" data-err="telefono"></p>
+        </div>
+      </section>
+
+      <!-- 2a. Dirección (solo delivery) -->
+      <section class="box" id="addrBox" hidden>
+        <h2>Dirección de entrega</h2>
+        <button type="button" class="btn gps-btn" id="btnGps">
+          <span id="gpsIcon"></span><span id="gpsLabel">Usar mi ubicación actual (GPS)</span>
+        </button>
+        <p class="gps-status" id="gpsStatus" hidden></p>
+        <p class="or-line"><span>o escribe tu dirección</span></p>
+        <div class="field">
+          <label for="fDireccion">Dirección</label>
+          <textarea id="fDireccion" name="direccion" rows="2" autocomplete="street-address" placeholder="Calle, sector, ciudad"></textarea>
+          <p class="err" data-err="direccion"></p>
+        </div>
+        <div class="field">
+          <label for="fDetalle">Detalle de la dirección <span class="opt">(opcional)</span></label>
+          <input id="fDetalle" name="detalle" type="text" placeholder="Edificio, piso, apto, punto de referencia…">
+        </div>
+      </section>
+
+      <!-- 2b. Mesa (solo comer en el local) -->
+      <section class="box" id="mesaBox" hidden>
+        <h2>Tu mesa</h2>
+        <div class="field">
+          <label for="fMesa">Número de mesa</label>
+          <input id="fMesa" name="mesa" type="text" inputmode="numeric" maxlength="4" placeholder="Ej: 5">
+          <p class="err" data-err="mesa"></p>
+        </div>
+      </section>
+
+      <!-- 3. Nota -->
+      <section class="box">
+        <h2>Nota para el restaurante <span class="opt">(opcional)</span></h2>
+        <div class="field">
+          <textarea id="fNota" name="nota" rows="2" placeholder="Ej: sin cebolla, salsa aparte, tocar el timbre…"></textarea>
+        </div>
+      </section>
+
+      <!-- 4. Método de pago -->
+      <section class="box">
+        <h2>Método de pago</h2>
+        <div class="pay-list" id="payList" role="radiogroup" aria-label="Método de pago"></div>
+        <p class="err" data-err="pago"></p>
+      </section>
+
+      <!-- 5. Monto a pagar (en divisa) -->
+      <section class="box pay-total" id="payTotal"></section>
+
+      <!-- 6. Fecha y hora (no editable) -->
+      <section class="box">
+        <h2>Fecha y hora del pedido</h2>
+        <div class="readonly" id="fechaHora"></div>
+        <p class="hint">Se registra automáticamente y no se puede modificar.</p>
+      </section>
+
+      <!-- 7. Resumen del pedido (se puede ajustar a última hora) -->
+      <section class="box">
+        <h2>Tu pedido</h2>
+        <div id="lines" class="lines"></div>
+        <a class="add-more" href="index.html">+ Agregar algo más</a>
+        <div id="totals"></div>
+      </section>
+
+      <!-- 8. Enviar -->
+      <button type="submit" class="btn primary block lg wa" id="btnSend"></button>
+      <p class="fine">Al enviar, se abrirá WhatsApp con tu pedido listo para enviar al restaurante.</p>
+    </form>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/viewport.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/backend.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/order.js"></script>
+  <script src="js/pedido.js"></script>
+</body>
+</html>
