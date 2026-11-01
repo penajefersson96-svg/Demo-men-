@@ -4,7 +4,8 @@
    El cliente sigue enviando su pedido por WhatsApp, y además queda REGISTRADO aquí para que la
    caja lo confirme y la cocina lo prepare (colección «deliveries»).
 
-   Estados:  new → accepted → cooking → ready → onway → (cobrado y borrado)
+   Estados:  new → confirmed (caja confirma) → accepted (cobrado, va a cocina) → cooking → ready
+   → «enviado» (la caja lo marca y el pedido se borra)
    Privacidad: el nombre, teléfono y dirección del cliente existen SOLO mientras el pedido está
    activo. Al entregarlo/cobrarlo o cancelarlo se borra todo; en el cierre solo queda el monto.
    ===================================================== */
@@ -14,7 +15,8 @@
 
   var STATUS = {
     new:      ['Nuevo', 'wait'],
-    accepted: ['Confirmado', 'ok'],
+    confirmed:['Confirmado · por cobrar', 'wait'],
+    accepted: ['Cobrado · en cocina', 'ok'],
     cooking:  ['En preparación', 'cook'],
     ready:    ['Listo para despachar', 'ready'],
     onway:    ['En camino', 'done']
@@ -32,10 +34,11 @@
     /* el cliente lo crea al enviar su pedido */
     create: function (order) { return DB.set(COL, order.id, order); },
     watchAll: function (cb) { return DB.watchCollection(COL, cb); },
-    setStatus: function (id, status) {
+    setStatus: function (id, status, extra) {
       return DB.update(COL, id, function (d) {
         if (!d) return undefined;
         d.status = status; d.updatedAt = Date.now();
+        if (extra) Object.keys(extra).forEach(function (k) { d[k] = extra[k]; });
         if (status === 'accepted' && !d.acceptedAt) d.acceptedAt = Date.now();
         return d;
       });

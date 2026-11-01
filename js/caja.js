@@ -342,7 +342,7 @@
   }
 
   function saveShift(list, cursor) {
-    return Live.setShift(list, cursor).catch(function () { toast('No se pudo guardar el turno'); });
+return Live.setShift(list, cursor).catch(function (e) { toast('No se pudo guardar el turno' + (e && e.code ? ' (' + e.code + ')' : '')); if (window.console) console.warn('turno', e); });
   }
 
   /* =====================================================

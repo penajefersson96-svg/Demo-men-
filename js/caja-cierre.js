@@ -198,7 +198,7 @@
   function payDelivery(d) {
     payDialog({
       title: 'Cobrar · Delivery #' + d.code, total: d.totalUSD, hint: d.pay ? 'El cliente indicó: ' + d.pay : '',
-      doneMsg: 'Cobrado · Delivery #' + d.code + ' entregado',
+doneMsg: 'Cobrado · Delivery #' + d.code + (Store.config().kitchenEnabled !== false ? ' enviado a cocina' : ' listo para despachar'),
       onConfirm: function (got, change, rate) {
         var who = me(), id = 'v' + d.id, created = false;
         var sale = {
@@ -208,7 +208,7 @@
         };
         return DB.update('sales', id, function (cur) { created = false; if (cur) return undefined; created = true; return sale; }).then(function () {
           if (!created) throw new Error('Este pedido ya fue cobrado desde otra caja.');
-          return Delivery.remove(d.id);
+return Delivery.setStatus(d.id, Store.config().kitchenEnabled !== false ? 'accepted' : 'ready', { paid: true });
         });
       }
     });
