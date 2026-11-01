@@ -179,10 +179,15 @@
       change: change, void: false, source: 'mesa'
     };
     var created = false;
-    return DB.update('sales', id, function (cur) {
-      created = false;
-      if (cur) return undefined;                      // ya la cobró otra caja
-      created = true; return sale;
+    if (sales[id]) return Promise.reject(new Error('Esta cuenta ya fue cobrada desde otra caja.'));
+    /* número de pedido: una sola secuencia (1, 2, 3…) compartida por todas las cajas */
+    return Delivery.nextNumber().catch(function () { return ''; }).then(function (n) {
+      sale.num = n ? Number(n) : null;
+      return DB.update('sales', id, function (cur) {
+        created = false;
+        if (cur) return undefined;                    // ya la cobró otra caja
+        created = true; return sale;
+      });
     }).then(function () {
       if (!created) throw new Error('Esta cuenta ya fue cobrada desde otra caja.');
       return Live.release(tid);
@@ -199,7 +204,7 @@
         var sale = {
           id: id, tableId: 'delivery', tableLabel: 'Delivery #' + d.code, waiter: '', caja: { id: who.id, name: who.name }, at: Date.now(),
           day: Live.dayKey(), rate: rate, totalUSD: r2(d.totalUSD), totalBs: r2(d.totalUSD * rate), plates: d.plates || 0,
-          payments: got.lines, receivedUSD: r2(got.got), change: change, void: false, source: 'delivery'
+          payments: got.lines, receivedUSD: r2(got.got), change: change, void: false, source: 'delivery', num: Number(d.code) || null
         };
         return DB.update('sales', id, function (cur) { created = false; if (cur) return undefined; created = true; return sale; }).then(function () {
           if (!created) throw new Error('Este pedido ya fue cobrado desde otra caja.');
@@ -249,7 +254,7 @@
         '<div><label for="cjCntBs">Bolívares contados</label><input id="cjCntBs" type="text" inputmode="decimal" value="' + esc(counted.bs) + '" placeholder="0.00"><div class="cc-diff" id="cjDiffBs"></div></div></div></div>' +
         '<div class="cj-actions"><button type="button" class="cj-btn primary lg" data-a="cc-close">🔒 Cerrar caja e imprimir comprobante</button></div>' +
         '<h4 class="cj-sub">Ventas por cerrar (' + list.length + ')</h4><div class="cj-list">' + list.slice().reverse().map(function (s) {
-          return '<div class="cj-line' + (s.void ? ' void' : '') + '"><div><b>' + esc(s.tableLabel) + '</b> · ' + hhmm(s.at) +
+          return '<div class="cj-line' + (s.void ? ' void' : '') + '"><div><b>' + (s.num && s.source !== 'delivery' ? '#' + s.num + ' · ' : '') + esc(s.tableLabel) + '</b> · ' + hhmm(s.at) +
             '<small>' + (s.payments || []).map(function (p) { return (MBYID[p.m] || {}).icon + ' ' + (MBYID[p.m] || {}).label; }).join(' + ') + (s.void ? ' · ANULADA' : '') + '</small></div>' +
             '<b>' + usd(s.totalUSD) + '</b>' + (s.void ? '' : '<button type="button" class="cj-btn sm danger" data-a="cc-void" data-id="' + esc(s.id) + '">Anular</button>') + '</div>';
         }).join('') + '</div>';
