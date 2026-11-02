@@ -8,7 +8,7 @@
   var K = window.AdminKit; if (!K) return;
   var $ = K.$, esc = K.esc, tabs = K.tabs;
   var METHODS = [['usd', '💵', 'Efectivo $', 'USD'], ['bs', '💰', 'Efectivo Bs', 'Bs'], ['pm', '📱', 'Pago móvil', 'Bs'], ['pos', '💳', 'Punto de venta', 'Bs']];
-  var PERIODS = [['hoy', 'Hoy'], ['ayer', 'Ayer'], ['7', '7 días'], ['30', '30 días'], ['todo', 'Todo']];
+  var PERIODS = [['hoy', 'Hoy'], ['ayer', 'Ayer'], ['7', '7 días'], ['mes', 'Este mes'], ['30', '30 días'], ['todo', 'Todo']];
   var period = 'hoy';
 
   function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
@@ -21,6 +21,7 @@
   function range() {
     var now = Date.now(), today = dayOf(now);
     if (period === 'todo') return { from: 0, to: Infinity };
+    if (period === 'mes') return { from: now - 32 * 86400000, to: Infinity, month: today.slice(0, 7) };
     if (period === 'hoy') return { from: now - 36 * 3600e3, to: Infinity, day: today };
     if (period === 'ayer') return { from: now - 60 * 3600e3, to: Infinity, day: dayOf(now - 86400000) };
     var d = Number(period) || 7;
@@ -28,6 +29,7 @@
   }
   function inRange(c, r) {
     if (r.day) return c.day === r.day;
+    if (r.month) return String(c.day || dayOf(c.to)).slice(0, 7) === r.month;
     return c.to >= r.from && c.to <= r.to;
   }
 
@@ -49,6 +51,38 @@
       }
     });
     return t;
+  }
+
+  /* gráfica de barras: ventas por día (o por mes si el período es largo) */
+  function chartHTML(t) {
+    var keys = Object.keys(t.days).sort();
+    if (keys.length < 2 && period !== 'mes') return '';
+    var rows = [], monthly = false, i;
+    function addDays(k, n) { var d = new Date(k + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+    var first = keys[0], last = keys[keys.length - 1];
+    if (period === 'mes') { first = dayOf(Date.now()).slice(0, 7) + '-01'; last = dayOf(Date.now()); }
+    else if (period === '7' || period === '30') { last = dayOf(Date.now()); first = addDays(last, -(Number(period) - 1)); }
+    var span = Math.round((new Date(last + 'T12:00:00Z') - new Date(first + 'T12:00:00Z')) / 86400000);
+    if (span > 62) {
+      monthly = true; var m = {};
+      keys.forEach(function (k) { var mk = k.slice(0, 7); m[mk] = (m[mk] || 0) + t.days[k].usd; });
+      Object.keys(m).sort().forEach(function (mk) { rows.push({ label: mk.slice(5) + '/' + mk.slice(2, 4), v: m[mk], tip: mk }); });
+    } else {
+      for (i = 0; i <= span; i++) { var k = addDays(first, i); rows.push({ label: k.slice(8), v: t.days[k] ? t.days[k].usd : 0, tip: k }); }
+    }
+    var max = rows.reduce(function (n, r) { return Math.max(n, r.v); }, 0) || 1, total = rows.reduce(function (n, r) { return n + r.v; }, 0);
+    var best = rows.reduce(function (b, r) { return r.v > b.v ? r : b; }, rows[0]);
+    var showVals = rows.length <= 12;
+    return '<div class="panel"><h3>' + (monthly ? 'Ventas por mes' : 'Ventas por día') + '</h3>' +
+      '<p class="help">En dólares. Mejor ' + (monthly ? 'mes' : 'día') + ': <b>' + esc(best.tip) + '</b> con <b>' + usd(best.v) + '</b> · promedio ' + (monthly ? 'mensual' : 'diario') + ': <b>' + usd(total / rows.length) + '</b>.</p>' +
+      '<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><div style="display:flex;align-items:flex-end;gap:' + (rows.length > 20 ? 4 : 8) + 'px;height:170px;padding-top:18px;min-width:' + Math.min(rows.length * 26, 900) + 'px">' +
+      rows.map(function (r) {
+        var h = Math.max(r.v > 0 ? 3 : 0, Math.round(r.v / max * 130));
+        return '<div title="' + esc(r.tip) + ' · ' + usd(r.v) + '" style="flex:1 1 0;min-width:18px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%">' +
+          (showVals && r.v > 0 ? '<small style="font-size:10px;color:var(--muted);margin-bottom:2px">' + Math.round(r.v) + '</small>' : '') +
+          '<div style="width:100%;max-width:34px;height:' + h + 'px;background:var(--brand);border-radius:6px 6px 0 0;opacity:' + (r === best ? 1 : .75) + '"></div>' +
+          '<small style="font-size:11px;color:var(--muted);margin-top:4px">' + esc(r.label) + '</small></div>';
+      }).join('') + '</div></div></div>';
   }
 
   function stat(label, value, sub) {
@@ -81,6 +115,8 @@
         h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">' +
           stat('Total vendido', usd(t.usd), bs(t.bs)) + stat('Órdenes', String(t.orders), t.deliv ? t.deliv + ' de delivery (' + usd(t.delivUSD) + ')' : '') +
           stat('Anuladas', String(t.voids), t.voids ? usd(t.voidUSD) : '') + stat('Cierres', String(all.length), '') + '</div>';
+
+        h += chartHTML(t);
 
         h += '<div class="panel"><h3>Cómo pagaron</h3><div class="list">' + METHODS.map(function (m) {
           var b = t.by[m[0]];

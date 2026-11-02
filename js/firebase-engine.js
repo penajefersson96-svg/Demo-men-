@@ -81,7 +81,7 @@
         document.body.appendChild(box); box._l = {};
       }
       box._l[col] = (e && e.code) || 'error';
-      box.textContent = '⚠️ Firebase no deja leer: ' + Object.keys(box._l).map(function (k) { return k + ' (' + box._l[k] + ')'; }).join(', ');
+      box.textContent = '⚠️ Firebase no deja leer: ' + Object.keys(box._l).map(function (k) { return k + ' (' + box._l[k] + ')'; }).join(', ') + '. Sal y vuelve a entrar; si sigue, el administrador debe editar tu usuario (Equipo → Editar) y ponerte una clave nueva.';
     } catch (x) {}
   }
 
@@ -219,8 +219,8 @@
         Object.keys(m).forEach(function (k) { (by[normUser(m[k].user)] = by[normUser(m[k].user)] || []).push(k); });
         return Promise.all(Object.keys(by).filter(function (u) { return by[u].length > 1; }).map(function (u) {
           return DB.get('logins', u).catch(function () { return null; }).then(function (lg) {
-            var ids = by[u], keep = ids.filter(function (k) { return lg && m[k].email === lg.email; })[0] ||
-              ids.filter(function (k) { return /\.[a-z0-9]+@/.test(m[k].email || ''); }).pop() || ids[ids.length - 1];
+            var ids = by[u], keep = ids.filter(function (k) { return lg && m[k].email === lg.email; })[0];
+            if (!keep) return;                       // sin certeza de cuál es la vigente, no se borra nada
             ids.forEach(function (k) { if (k !== keep) { delete m[k]; jobs.push(DB.remove('staff', k).catch(function () {})); } });
           });
         })).then(function () { return Promise.all(jobs); }).then(function () {
