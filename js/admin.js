@@ -16,7 +16,7 @@
   let app, main, session;
   const TABS = [
     ['platos', 'Platos', '🍽️'], ['categorias', 'Categorías', '🗂️'], ['importar', 'Importar carta', '📷'], ['mesas', 'Mesas y QR', '🔳'], ['meseros', 'Meseros', '🧑‍🍳'],
-    ['negocio', 'Negocio', '🏪'], ['horario', 'Horario', '🕒'], ['tasa', 'Tasa', '💱'],
+    ['cierres', 'Ventas y cierres', '💵'], ['negocio', 'Negocio', '🏪'], ['horario', 'Horario', '🕒'], ['tasa', 'Tasa', '💱'],
     ['textos', 'Textos legales', '📄'], ['cuenta', 'Equipo y cuenta', '🔐']
   ];
   const tabs = {};
