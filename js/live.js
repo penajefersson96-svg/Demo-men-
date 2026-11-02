@@ -121,13 +121,33 @@
       var t = String(tableId), k = genKey();
       return DB.set(KEYS_COL, t, { key: k, at: Date.now() }).then(function () { keys[t] = k; return k; });
     },
-    /* la caja aparta una mesa para un cliente que no puede escanear el QR */
-    reserve: function (tableId, label) {
+    /* la caja abre una mesa «a mano» para un cliente que no puede escanear el QR:
+       el cliente no pide solo, llama al mesero y la caja registra el pedido (ver js/caja-manual.js) */
+    openManual: function (tableId, label) {
       return mutate(tableId, function (s) {
         if (!s.people) s.people = {};
-        s.reserved = { name: String(label || '').slice(0, 30), at: Date.now() };
+        s.manual = { name: String(label || '').slice(0, 30), at: Date.now() };
         return true;
       }, true);
+    },
+    /* la caja agrega una ronda ya confirmada (va directo a la cocina). lines = [{dishId,name,price,qty}] */
+    addStaffRound: function (tableId, lines) {
+      lines = (lines || []).filter(function (l) { return l && l.qty > 0; });
+      if (!lines.length) return Promise.resolve(0);
+      return DB.get(COL, docId(tableId)).then(function (cur) {
+        return (cur && !cur.waiter) ? nextWaiter().catch(function () { return null; }) : null;
+      }).then(function (pick) {
+        return mutate(tableId, function (s) {
+          if (!s.waiter && pick) s.waiter = pick;
+          s.round += 1;
+          var now = Date.now();
+          lines.forEach(function (l) {
+            s.items.push({ id: uid('i'), pid: 'caja', who: (s.manual && s.manual.name) || 'Mesa', dishId: l.dishId, name: l.name,
+                           price: Number(l.price) || 0, qty: Math.min(99, l.qty), status: 'accepted', round: s.round, at: now, sentAt: now });
+          });
+          return s.round;
+        }, true);
+      });
     },
 
     /* ---------- cliente en la mesa ---------- */

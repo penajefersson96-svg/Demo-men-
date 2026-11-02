@@ -292,7 +292,7 @@
       var s = sessions[t.id];
       if (!s) return '<button type="button" class="cj-table free" data-a="detail" data-t="' + esc(t.id) + '"><b>' + esc(t.label) + '</b><span class="cj-state">Libre</span></button>';
       var people = Object.keys(s.people || {}).length, flags = '';
-      if (s.reserved && !people) return '<button type="button" class="cj-table busy" data-a="detail" data-t="' + esc(t.id) + '"><b>' + esc(t.label) + '</b><span class="cj-state">🔖 Apartada</span><span class="cj-mini">' + esc(s.reserved.name || 'Esperando al cliente') + '</span></button>';
+      if (s.manual && !people) return '<button type="button" class="cj-table busy' + (s.calls && s.calls.bill ? ' bill' : '') + '" data-a="detail" data-t="' + esc(t.id) + '"><b>' + esc(t.label) + '</b><span class="cj-state">🪑 Mesa manual</span><span class="cj-mini">' + esc(s.manual.name || 'Atiende el mesero') + '</span></button>';
       if (s.calls && s.calls.bill) flags += '<span class="cj-flag bill">🧾 Cuenta</span>';
       if (s.calls && s.calls.waiter) flags += '<span class="cj-flag call">🛎️ Llama</span>';
       if (rounds(s).some(function (r) { return r.status === 'sent'; })) flags += '<span class="cj-flag new">Nuevo</span>';
@@ -428,9 +428,9 @@
     var tid = detailId, s = sessions[tid];
     if (!s) {
       box.innerHTML = '<button type="button" class="cj-x" data-x="close" aria-label="Cerrar">✕</button><h3>' + esc(tableLabel(tid)) + '</h3>' +
-        '<p><span class="cj-pill ok">Libre</span></p><p class="cj-hint">Se ocupa sola cuando un cliente escanea el QR de la mesa. Si un cliente no puede escanear, apártale la mesa: tú le muestras el QR de esa mesa en esta pantalla.</p>' +
+        '<p><span class="cj-pill ok">Libre</span></p><p class="cj-hint">Se ocupa sola cuando un cliente escanea el QR de la mesa. Si un cliente <b>no puede escanear</b>, ábrele la mesa a mano: el cliente llama al mesero para todo y tú registras el pedido aquí.</p>' +
         '<label class="cj-lbl" for="cjResName">Nombre del cliente (opcional)</label><input id="cjResName" class="cj-select" type="text" maxlength="30" placeholder="Ej: Sr. Pérez" autocomplete="off">' +
-        '<div class="cj-actions"><button type="button" class="cj-btn primary" data-x="reserve">🔖 Apartar mesa y mostrar QR</button></div>';
+        '<div class="cj-actions"><button type="button" class="cj-btn primary" data-x="reserve">🪑 Abrir mesa manual</button></div>';
     } else {
       var people = Object.keys(s.people || {}).map(function (k) { return s.people[k].name; });
       var opts = shiftList().map(function (w) {
@@ -442,8 +442,8 @@
       var drafts = (s.items || []).filter(function (i) { return i.status === 'draft'; });
       box.innerHTML =
         '<button type="button" class="cj-x" data-x="close" aria-label="Cerrar">✕</button>' +
-        '<h3>' + esc(tableLabel(tid)) + ' <span class="cj-pill wait">Ocupada</span></h3>' +
-        '<p class="cj-by">' + people.map(esc).join(', ') + ' · desde ' + ago(s.openedAt).replace('hace ', 'hace ') + '</p>' +
+        '<h3>' + esc(tableLabel(tid)) + ' <span class="cj-pill wait">' + (s.manual ? 'Mesa manual' : 'Ocupada') + '</span></h3>' +
+        '<p class="cj-by">' + (s.manual && !people.length ? esc(s.manual.name || 'Cliente sin QR') : people.map(esc).join(', ')) + ' · desde ' + ago(s.openedAt).replace('hace ', 'hace ') + '</p>' +
         '<label class="cj-lbl" for="cjW">Mesero de la mesa</label>' +
         '<select id="cjW" class="cj-select"><option value="">Sin mesero</option>' + opts + '</select>' +
         (rounds(s).length ? rounds(s).map(function (r) {
@@ -454,8 +454,9 @@
         (drafts.length ? '<p class="cj-hint">Tienen ' + drafts.reduce(function (n, i) { return n + i.qty; }, 0) + ' platos por enviar (aún no pedidos).</p>' : '') +
         '<div class="cj-total">' + usdBs(tableTotal(s)) + '</div>' +
         '<div class="cj-actions">' +
+          (s.manual && window.CajaManual ? '<button type="button" class="cj-btn primary" data-x="addorder">➕ Agregar pedido</button>' : '') +
           (window.CajaCierre && tableTotal(s) > 0 ? '<button type="button" class="cj-btn primary" data-x="pay">💵 Cobrar</button>' : '') +
-          '<button type="button" class="cj-btn" data-x="qr">🔑 Ver QR de la mesa</button>' +
+          (s.manual ? '' : '<button type="button" class="cj-btn" data-x="qr">🔑 Ver QR de la mesa</button>') +
           (s.calls && s.calls.waiter ? '<button type="button" class="cj-btn" data-x="call">Quitar llamado</button>' : '') +
           '<button type="button" class="cj-btn danger" data-x="release">Liberar sin cobrar</button></div>';
       $('#cjW', box).addEventListener('change', function () {
@@ -471,9 +472,10 @@
       else if (b.dataset.x === 'reserve') {
         var nm = ($('#cjResName', box) || {}).value || '';
         b.disabled = true;
-        Live.ensureKeys([tid]).then(function () { return Live.reserve(tid, nm); }).then(function () { showQR(tid); toast(tableLabel(tid) + ' apartada'); })
-          .catch(function (e) { b.disabled = false; toast('No se pudo apartar la mesa' + (e && e.code ? ' (' + e.code + ')' : '')); });
+        Live.ensureKeys([tid]).then(function () { return Live.openManual(tid, nm); }).then(function () { toast(tableLabel(tid) + ' abierta · agrega el pedido'); setTimeout(function () { if (window.CajaManual) CajaManual.open(tid); }, 250); })
+          .catch(function (e) { b.disabled = false; toast('No se pudo abrir la mesa' + (e && e.code ? ' (' + e.code + ')' : '')); });
       }
+      else if (b.dataset.x === 'addorder' && window.CajaManual) CajaManual.open(tid);
       else if (b.dataset.x === 'release') confirmRelease(tid);
       else if (b.dataset.x === 'pay' && window.CajaCierre) CajaCierre.openPay(tid);
     };

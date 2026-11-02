@@ -143,6 +143,40 @@
     return auth.signOut().catch(function () {}).then(function () { return auth.signInAnonymously(); }).catch(function () {});
   }
 
+
+  /* cambiar nombre, rol y/o clave de un usuario que ya existe.
+     Firebase no deja que un administrador cambie la clave de OTRA persona desde el navegador, así que con clave nueva
+     se crea una cuenta nueva con la misma identidad (usuario) y la anterior queda sin acceso. */
+  function editStaff(u, o, m) {
+    var oldUid = Object.keys(m).filter(function (k) { return normUser(m[k].user) === u; })[0], cur = m[oldUid];
+    var role = ROLES.indexOf(o.role) >= 0 ? o.role : cur.role, name = o.name != null ? String(o.name) : (cur.name || '');
+    var me = auth.currentUser;
+    if (cur.role === 'admin' && role !== 'admin') {
+      if (me && me.uid === oldUid) throw new Error('No puedes quitarte a ti mismo el rol de administrador.');
+      var others = Object.keys(m).filter(function (k) { return m[k].role === 'admin' && k !== oldUid; });
+      if (!others.length) throw new Error('Debe quedar al menos un administrador.');
+    }
+    if (!o.pass) {
+      return DB.update('staff', oldUid, function (d) { if (!d) return undefined; d.role = role; d.name = name; return d; })
+        .then(function () { return { message: 'Datos actualizados ✓' }; });
+    }
+    if (String(o.pass).length < 6) throw new Error('La clave debe tener al menos 6 caracteres.');
+    if (me && me.uid === oldUid) throw new Error('Tu propia clave se cambia en «Mi cuenta», arriba.');
+    var alias = (u.indexOf('@') > 0 ? u.split('@')[0] : u) + '.' + Date.now().toString(36) + '@' + DOMAIN;
+    var sec = firebase.initializeApp(cfg, 'sec' + Date.now()), sa = sec.auth(), uid = '';
+    function done() { return sec.delete().catch(function () {}); }
+    return sa.createUserWithEmailAndPassword(alias, o.pass).then(function (c) {
+      uid = c.user.uid; return sa.signOut();
+    }).then(function () {
+      return DB.set('staff', uid, { user: u, name: name, role: role, email: alias });
+    }).then(function () {
+      return DB.set('logins', u, { email: alias, at: Date.now() });
+    }).then(function () {
+      return DB.remove('staff', oldUid);
+    }).then(function () { return done().then(function () { return { message: 'Clave cambiada ✓ · ya puede entrar con la clave nueva' }; }); },
+      function (e) { return done().then(function () { throw new Error(nice(e)); }); });
+  }
+
   var Auth = {
     mode: 'firebase',
     ready: authInit.then(loadSession).then(function () {}),
@@ -152,7 +186,9 @@
     login: function (user, pass, roles) {
       var email = toEmail(user);
       if (!email) return fail('Escribe tu correo o usuario.');
-      return wrap(auth.signInWithEmailAndPassword(email, String(pass || '')).then(loadSession).then(function (s) {
+      /* si el administrador le cambió la clave, su acceso quedó en una cuenta nueva (colección «logins») */
+      var mapP = DB.get('logins', normUser(user)).then(function (d) { return (d && d.email) || email; }).catch(function () { return email; });
+      return wrap(mapP.then(function (em) { return auth.signInWithEmailAndPassword(em, String(pass || '')); }).then(loadSession).then(function (s) {
         if (!s) return backToGuest().then(function () { throw new Error('Este usuario no tiene acceso al sistema. Pídele al administrador que lo agregue.'); });
         if (roles && roles.indexOf(s.role) < 0 && s.role !== 'admin') {
           return backToGuest().then(function () { throw new Error('Este usuario no tiene permiso para esta pantalla.'); });
@@ -191,10 +227,7 @@
       if (ROLES.indexOf(o.role) < 0) return fail('Elige un rol.');
       return DB.list('staff').then(function (m) {
         var exists = Object.keys(m).some(function (k) { return normUser(m[k].user) === u; });
-        if (exists) {
-          if (u.indexOf('@') > 0) return auth.sendPasswordResetEmail(u).then(function () { return { message: 'Enviamos un correo a ' + u + ' para que cambie su clave.' }; });
-          throw new Error('En Firebase la clave de otro usuario no se cambia desde aquí. Quítalo y créalo con otro nombre, o bórralo también en Firebase → Authentication.');
-        }
+        if (exists) return editStaff(u, o, m);
         if (!o.pass || String(o.pass).length < 6) throw new Error('La clave debe tener al menos 6 caracteres.');
         var email = toEmail(u), sec = firebase.initializeApp(cfg, 'sec' + Date.now()), sa = sec.auth(), uid = '';
         function done() { return sec.delete().catch(function () {}); }
@@ -219,7 +252,7 @@
         if (!uid) return null;
         var admins = Object.keys(m).filter(function (k) { return m[k].role === 'admin' && k !== uid; });
         if (m[uid].role === 'admin' && !admins.length) throw new Error('Debe quedar al menos un administrador.');
-        return DB.remove('staff', uid);
+        return DB.remove('staff', uid).then(function () { return DB.remove('logins', u).catch(function () {}); });
       });
     },
 

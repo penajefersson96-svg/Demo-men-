@@ -68,6 +68,7 @@
       Auth.login(f.user.value, f.pass.value, o.roles).then(function (s) {
         o.onReady(s);
       }).catch(function (ex) {
+        if (!document.getElementById('lPass')) { if (window.console) console.error(ex); return; }   // la pantalla ya cambió: el error no es del acceso
         err.textContent = ex.message || 'No se pudo entrar.';
         btn.disabled = false; btn.textContent = 'Entrar';
         document.getElementById('lPass').select();

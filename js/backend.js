@@ -203,9 +203,16 @@
       var u = normUser(o.user);
       if (!/^[a-z0-9._-]{3,30}$/.test(u)) return fail('El usuario debe tener entre 3 y 30 letras, números, punto o guion, sin espacios.');
       if (ROLES.indexOf(o.role) < 0) return fail('Elige un rol.');
-      if (!o.pass || String(o.pass).length < 6) return fail('La clave debe tener al menos 6 caracteres.');
-      return hash(u, o.pass).then(function (h) {
-        return DB.set('staff', u, { user: u, name: o.name || '', role: o.role, hash: h, demoPass: false });
+      return DB.get('staff', u).then(function (cur) {
+        if (!cur && (!o.pass || String(o.pass).length < 6)) throw new Error('La clave debe tener al menos 6 caracteres.');
+        if (cur && o.pass && String(o.pass).length < 6) throw new Error('La clave debe tener al menos 6 caracteres.');
+        var s0 = current();
+        if (cur && cur.role === 'admin' && o.role !== 'admin') {
+          if (s0 && s0.user === u) throw new Error('No puedes quitarte a ti mismo el rol de administrador.');
+        }
+        var rec = { user: u, name: o.name != null ? o.name : (cur ? cur.name : ''), role: o.role, hash: cur ? cur.hash : '', demoPass: cur ? !!cur.demoPass : false };
+        if (!o.pass) return DB.set('staff', u, rec).then(function () { return cur ? { message: 'Datos actualizados ✓' } : null; });
+        return hash(u, o.pass).then(function (h) { rec.hash = h; rec.demoPass = false; return DB.set('staff', u, rec); });
       });
     },
     deleteStaff: function (user) {

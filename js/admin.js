@@ -578,21 +578,21 @@
         sb.innerHTML = '<h3>Equipo</h3><p class="help">Usuarios que pueden entrar a la caja y a la cocina.' + (DB.mode === 'firebase' ? ' Pueden ser un correo o un nombre corto (ej: caja2).' : '') + '</p>' +
           '<table class="staff"><thead><tr><th>Usuario</th><th>Rol</th><th></th></tr></thead><tbody>' +
           list.map(u => '<tr data-u="' + esc(u.user) + '"><td><b>' + esc(u.user) + '</b><br><small style="color:var(--muted)">' + esc(u.name || '') + '</small></td><td>' + esc(ROLE_NAMES[u.role] || u.role) + '</td>' +
-            '<td style="text-align:right;white-space:nowrap"><button class="btn sm" data-pw>Clave</button> <button class="btn sm danger" data-rm>Quitar</button></td></tr>').join('') +
+            '<td style="text-align:right;white-space:nowrap"><button class="btn sm" data-pw>Editar</button> <button class="btn sm danger" data-rm>Quitar</button></td></tr>').join('') +
           '</tbody></table><div class="actions" style="margin-top:12px"><button class="btn" id="stAdd">＋ Agregar usuario</button></div>';
       });
       const staffForm = (u) => {
-        const m = modal('<h3>' + (u ? 'Cambiar clave de ' + esc(u.user) : 'Nuevo usuario') + '</h3><form id="sf" novalidate>' +
-          (u ? '' : '<div class="f"><label>Usuario</label><input type="text" id="sU" maxlength="30" autocapitalize="none"><small class="h">Minúsculas, sin espacios. Ej: caja2</small></div>' +
-            '<div class="f"><label>Nombre (opcional)</label><input type="text" id="sNm" maxlength="40"></div>' +
-            '<div class="f"><label>Rol</label><select id="sR"><option value="caja">Caja</option><option value="cocina">Cocina</option><option value="admin">Administrador</option></select></div>') +
-          '<div class="f"><label>' + (u ? 'Clave nueva' : 'Clave') + '</label><input type="password" id="sP" autocomplete="new-password"><small class="h">Mínimo 6 caracteres.</small></div>' +
+        const roleSel = r => '<option value="caja"' + (r === 'caja' ? ' selected' : '') + '>Caja</option><option value="cocina"' + (r === 'cocina' ? ' selected' : '') + '>Cocina</option><option value="admin"' + (r === 'admin' ? ' selected' : '') + '>Administrador</option>';
+        const m = modal('<h3>' + (u ? 'Editar a ' + esc(u.user) : 'Nuevo usuario') + '</h3><form id="sf" novalidate>' +
+          (u ? '' : '<div class="f"><label>Usuario</label><input type="text" id="sU" maxlength="30" autocapitalize="none"><small class="h">Minúsculas, sin espacios. Ej: caja2</small></div>') +
+          '<div class="f"><label>Nombre (opcional)</label><input type="text" id="sNm" maxlength="40" value="' + esc(u ? (u.name || '') : '') + '"></div>' +
+          '<div class="f"><label>Rol</label><select id="sR">' + roleSel(u ? u.role : 'caja') + '</select></div>' +
+          '<div class="f"><label>' + (u ? 'Clave nueva (opcional)' : 'Clave') + '</label><input type="password" id="sP" autocomplete="new-password"><small class="h">' + (u ? 'Déjala vacía si solo quieres cambiar el nombre o el rol. ' : '') + 'Mínimo 6 caracteres.</small></div>' +
           '<div class="err" id="sE"></div><div class="m-foot"><button type="button" class="btn" data-cancel>Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></form>');
         $('[data-cancel]', m.el).onclick = m.close;
         $('#sf', m.el).onsubmit = ev => {
           ev.preventDefault();
-          const o = u ? { user: u.user, role: u.role, name: u.name, pass: $('#sP', m.el).value }
-            : { user: $('#sU', m.el).value, name: $('#sNm', m.el).value.trim(), role: $('#sR', m.el).value, pass: $('#sP', m.el).value };
+          const o = { user: u ? u.user : $('#sU', m.el).value, name: $('#sNm', m.el).value.trim(), role: $('#sR', m.el).value, pass: $('#sP', m.el).value };
           Auth.saveStaff(o).then(r => { m.close(); toast((r && r.message) || 'Usuario guardado ✓'); paintStaff(); }).catch(ex => { $('#sE', m.el).textContent = ex.message; });
         };
       };
