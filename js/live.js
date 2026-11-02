@@ -21,6 +21,22 @@
 
   var COL = 'sessions';
 
+  /* ---------- clave secreta por mesa ----------
+     Cada mesa tiene un código (colección «tablekeys», solo lo lee el personal) que va dentro del QR.
+     La mesa se guarda en el documento «<mesa>_<código>»: sin el código no se puede ni encontrar ni escribir. */
+  var KEYS_COL = 'tablekeys', keys = {}, known = {};
+  var ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  function genKey() {
+    var out = '', a = new Uint32Array(8);
+    try { (window.crypto || window.msCrypto).getRandomValues(a); } catch (e) { for (var j = 0; j < 8; j++) a[j] = Math.floor(Math.random() * 4294967296); }
+    for (var i = 0; i < 8; i++) out += ALPHA.charAt(a[i] % ALPHA.length);
+    return out;
+  }
+  function docId(t) {
+    t = String(t);
+    return known[t] || (keys[t] ? t + '_' + keys[t] : t);
+  }
+
   function uid(p) { return p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
   function newSession(id) {
@@ -55,7 +71,7 @@
   /* Modifica una sesión de forma atómica. fn(s) devuelve el resultado; si la mesa no existe y create=false, no hace nada. */
   function mutate(tableId, fn, create) {
     var id = String(tableId), out;
-    return DB.update(COL, id, function (s) {
+    return DB.update(COL, docId(id), function (s) {
       if (!s) { if (!create) return undefined; s = newSession(id); }
       out = fn(s);
       s.updatedAt = Date.now();
@@ -64,9 +80,55 @@
   }
 
   window.Live = {
+    genKey: genKey,
     /* ---------- escuchar ---------- */
-    watch: function (tableId, cb) { return DB.watchDoc(COL, String(tableId), cb); },
-    watchAll: function (cb) { return DB.watchCollection(COL, cb); },
+    watch: function (tableId, cb) { return DB.watchDoc(COL, docId(tableId), cb); },
+    /* devuelve { mesa: sesión } (las sesiones se guardan como «<mesa>_<código>») */
+    watchAll: function (cb) {
+      return DB.watchCollection(COL, function (all) {
+        var out = {}, ids = {};
+        Object.keys(all || {}).forEach(function (id) {
+          var s = all[id], t = String((s && s.tableId) != null ? s.tableId : id);
+          if (out[t] && (out[t].updatedAt || 0) >= (s.updatedAt || 0)) return;
+          out[t] = s; ids[t] = id;
+        });
+        known = ids; cb(out);
+      });
+    },
+
+    /* ---------- códigos de mesa ---------- */
+    setKey: function (tableId, key) { if (key) keys[String(tableId)] = String(key); },
+    keyFor: function (tableId) { return keys[String(tableId)] || ''; },
+    /* el personal carga los códigos y crea los que falten (una sola vez por mesa) */
+    ensureKeys: function (tableIds) {
+      return DB.list(KEYS_COL).then(function (all) {
+        var jobs = [];
+        Object.keys(all || {}).forEach(function (t) { if (all[t] && all[t].key) keys[t] = all[t].key; });
+        (tableIds || []).forEach(function (t) {
+          t = String(t);
+          if (keys[t]) return;
+          var k = genKey();
+          jobs.push(DB.update(KEYS_COL, t, function (cur) {
+            if (cur && cur.key) { k = cur.key; return undefined; }
+            return { key: k, at: Date.now() };
+          }).then(function () { keys[t] = k; }));
+        });
+        return Promise.all(jobs);
+      }).catch(function (e) { if (window.console) console.warn('tablekeys', e); });
+    },
+    /* nuevo código para una mesa (los QR impresos de esa mesa dejan de servir) */
+    renewKey: function (tableId) {
+      var t = String(tableId), k = genKey();
+      return DB.set(KEYS_COL, t, { key: k, at: Date.now() }).then(function () { keys[t] = k; return k; });
+    },
+    /* la caja aparta una mesa para un cliente que no puede escanear el QR */
+    reserve: function (tableId, label) {
+      return mutate(tableId, function (s) {
+        if (!s.people) s.people = {};
+        s.reserved = { name: String(label || '').slice(0, 30), at: Date.now() };
+        return true;
+      }, true);
+    },
 
     /* ---------- cliente en la mesa ---------- */
     join: function (tableId, name) {
@@ -104,7 +166,7 @@
     /* Envía lo "por enviar" como una ronda nueva. En el primer envío de la mesa le asigna
        el siguiente mesero del turno (por orden) y lo conserva toda la estadía. */
     send: function (tableId) {
-      return DB.get(COL, String(tableId)).then(function (cur) {
+      return DB.get(COL, docId(tableId)).then(function (cur) {
         var needs = cur && !cur.waiter && cur.items.some(function (i) { return i.status === 'draft'; });
         /* si no se pudo asignar mesero (permisos, red…), el pedido igual se envía y la caja lo asigna */
         return needs ? nextWaiter().catch(function (e) { if (window.console) console.warn('turno', e); return null; }) : null;
@@ -161,7 +223,7 @@
       });
     },
     release: function (tableId) {                        // libera la mesa y BORRA todos sus datos
-      return DB.remove(COL, String(tableId));
+      return DB.remove(COL, docId(tableId));
     },
     purgeOlderThan: function (hours) {                   // limpieza de mesas abandonadas
       return DB.list(COL).then(function (all) {

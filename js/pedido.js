@@ -244,7 +244,10 @@
     var phone = String(Store.config().whatsapp || '').replace(/\D/g, '');
     if (!phone) { toast('El restaurante aún no configuró su WhatsApp'); return; }
 
-    if (!isDelivery) Store.mode.set('local', form.mesa.value.trim());
+    if (!isDelivery) {
+      var cm = Store.mode.get(), tb = form.mesa.value.trim();
+      Store.mode.set('local', tb, cm && String(cm.table) === tb ? cm.key : '');     // conserva la clave de la mesa
+    }
 
     var now = new Date();
     var win = window.open('', '_blank');      // se abre ya (el navegador lo exige dentro del toque); se llena al tener el número

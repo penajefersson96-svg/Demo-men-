@@ -177,8 +177,8 @@
   /* ---------- modo de pedido: delivery o comer en el local ---------- */
   var mode = {
     get: function () { return read(MODE_KEY, null); },
-    set: function (type, table) {
-      write(MODE_KEY, { type: type === 'local' ? 'local' : 'delivery', table: table ? String(table) : '' });
+    set: function (type, table, key) {
+      write(MODE_KEY, { type: type === 'local' ? 'local' : 'delivery', table: table ? String(table) : '', key: key ? String(key) : '' });
       emit('store:mode');
     },
     clear: function () { try { localStorage.removeItem(MODE_KEY); } catch (e) {} emit('store:mode'); }

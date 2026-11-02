@@ -166,6 +166,7 @@
     if (window.CajaDelivery) CajaDelivery.start();
     Store.refreshRate().then(paint);
     Live.purgeOlderThan(14);                        // limpia mesas abandonadas (más de 14 horas sin actividad)
+    Live.ensureKeys(tables().map(function (t) { return t.id; })).then(paint);   // clave secreta de cada mesa (va dentro del QR)
     setInterval(paint, 30000);                      // actualiza los "hace X min"
     paint();
   }
@@ -291,6 +292,7 @@
       var s = sessions[t.id];
       if (!s) return '<button type="button" class="cj-table free" data-a="detail" data-t="' + esc(t.id) + '"><b>' + esc(t.label) + '</b><span class="cj-state">Libre</span></button>';
       var people = Object.keys(s.people || {}).length, flags = '';
+      if (s.reserved && !people) return '<button type="button" class="cj-table busy" data-a="detail" data-t="' + esc(t.id) + '"><b>' + esc(t.label) + '</b><span class="cj-state">🔖 Apartada</span><span class="cj-mini">' + esc(s.reserved.name || 'Esperando al cliente') + '</span></button>';
       if (s.calls && s.calls.bill) flags += '<span class="cj-flag bill">🧾 Cuenta</span>';
       if (s.calls && s.calls.waiter) flags += '<span class="cj-flag call">🛎️ Llama</span>';
       if (rounds(s).some(function (r) { return r.status === 'sent'; })) flags += '<span class="cj-flag new">Nuevo</span>';
@@ -342,7 +344,7 @@
   }
 
   function saveShift(list, cursor) {
-return Live.setShift(list, cursor).catch(function (e) { toast('No se pudo guardar el turno' + (e && e.code ? ' (' + e.code + ')' : '')); if (window.console) console.warn('turno', e); });
+    return Live.setShift(list, cursor).catch(function (e) { toast('No se pudo guardar el turno' + (e && e.code ? ' (' + e.code + ')' : '')); if (window.console) console.warn('turno', e); });
   }
 
   /* =====================================================
@@ -426,7 +428,9 @@ return Live.setShift(list, cursor).catch(function (e) { toast('No se pudo guarda
     var tid = detailId, s = sessions[tid];
     if (!s) {
       box.innerHTML = '<button type="button" class="cj-x" data-x="close" aria-label="Cerrar">✕</button><h3>' + esc(tableLabel(tid)) + '</h3>' +
-        '<p><span class="cj-pill ok">Libre</span></p><p class="cj-hint">Nadie ha escaneado esta mesa. Se ocupa sola cuando un cliente entra desde su código QR.</p>';
+        '<p><span class="cj-pill ok">Libre</span></p><p class="cj-hint">Se ocupa sola cuando un cliente escanea el QR de la mesa. Si un cliente no puede escanear, apártale la mesa: tú le muestras el QR de esa mesa en esta pantalla.</p>' +
+        '<label class="cj-lbl" for="cjResName">Nombre del cliente (opcional)</label><input id="cjResName" class="cj-select" type="text" maxlength="30" placeholder="Ej: Sr. Pérez" autocomplete="off">' +
+        '<div class="cj-actions"><button type="button" class="cj-btn primary" data-x="reserve">🔖 Apartar mesa y mostrar QR</button></div>';
     } else {
       var people = Object.keys(s.people || {}).map(function (k) { return s.people[k].name; });
       var opts = shiftList().map(function (w) {
@@ -451,6 +455,7 @@ return Live.setShift(list, cursor).catch(function (e) { toast('No se pudo guarda
         '<div class="cj-total">' + usdBs(tableTotal(s)) + '</div>' +
         '<div class="cj-actions">' +
           (window.CajaCierre && tableTotal(s) > 0 ? '<button type="button" class="cj-btn primary" data-x="pay">💵 Cobrar</button>' : '') +
+          '<button type="button" class="cj-btn" data-x="qr">🔑 Ver QR de la mesa</button>' +
           (s.calls && s.calls.waiter ? '<button type="button" class="cj-btn" data-x="call">Quitar llamado</button>' : '') +
           '<button type="button" class="cj-btn danger" data-x="release">Liberar sin cobrar</button></div>';
       $('#cjW', box).addEventListener('change', function () {
@@ -462,9 +467,39 @@ return Live.setShift(list, cursor).catch(function (e) { toast('No se pudo guarda
       var b = e.target.closest('[data-x]'); if (!b) return;
       if (b.dataset.x === 'close') closeModal();
       else if (b.dataset.x === 'call') Live.dismissCall(tid, 'waiter');
+      else if (b.dataset.x === 'qr') showQR(tid);
+      else if (b.dataset.x === 'reserve') {
+        var nm = ($('#cjResName', box) || {}).value || '';
+        b.disabled = true;
+        Live.ensureKeys([tid]).then(function () { return Live.reserve(tid, nm); }).then(function () { showQR(tid); toast(tableLabel(tid) + ' apartada'); })
+          .catch(function (e) { b.disabled = false; toast('No se pudo apartar la mesa' + (e && e.code ? ' (' + e.code + ')' : '')); });
+      }
       else if (b.dataset.x === 'release') confirmRelease(tid);
       else if (b.dataset.x === 'pay' && window.CajaCierre) CajaCierre.openPay(tid);
     };
+  }
+
+  /* ---------- QR de una mesa (para clientes que no pueden escanear el de la mesa) ---------- */
+  function tableLink(tid) {
+    var u = (Store.config().publicUrl || '').trim();
+    if (!u) u = location.href.replace(/[#?].*$/, '').replace(/[^\/]*$/, '');
+    if (!/\/$/.test(u)) u += '/';
+    return u + 'index.html?modo=local&mesa=' + encodeURIComponent(tid) + '&k=' + encodeURIComponent(Live.keyFor(tid));
+  }
+  function showQR(tid) {
+    if (!Live.keyFor(tid)) { toast('La clave de la mesa aún no está lista. Intenta de nuevo en unos segundos.'); return; }
+    var link = tableLink(tid), qr = window.QRLib ? QRLib.svg(link, 260) : '';
+    var m = modal('<button type="button" class="cj-x" data-x="close" aria-label="Cerrar">✕</button><h3>' + esc(tableLabel(tid)) + ' · QR</h3>' +
+      '<p class="cj-hint">El cliente escanea este código con la cámara de su celular y entra a su mesa. No lo compartas con otras personas.</p>' +
+      '<div style="display:grid;place-items:center;padding:8px 0;background:#fff;border-radius:14px">' + qr + '</div>' +
+      '<div class="cj-actions"><button type="button" class="cj-btn" data-x="copy">Copiar enlace</button>' +
+      '<a class="cj-btn" style="display:grid;place-items:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent('Tu mesa: ' + link) + '">Enviar por WhatsApp</a>' +
+      '<button type="button" class="cj-btn primary" data-x="close">Listo</button></div>');
+    m.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-x]'); if (!b) return;
+      if (b.dataset.x === 'copy') { try { navigator.clipboard.writeText(link).then(function () { toast('Enlace copiado'); }); } catch (x) { toast('No se pudo copiar'); } }
+      else if (b.dataset.x === 'close') closeModal();
+    });
   }
 
   /* herramientas para js/caja-cierre.js */

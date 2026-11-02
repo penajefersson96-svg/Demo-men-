@@ -285,7 +285,7 @@
     if (!/\/$/.test(u)) u += '/';
     return u;
   }
-  const tableLink = t => baseUrl() + 'index.html?modo=local&mesa=' + encodeURIComponent(t.id);
+  const tableLink = t => baseUrl() + 'index.html?modo=local&mesa=' + encodeURIComponent(t.id) + '&k=' + encodeURIComponent(window.Live ? Live.keyFor(t.id) : '');
   const deliveryLink = () => baseUrl() + 'index.html?modo=delivery';
 
   function qrPNG(label, link, filename) {
@@ -325,7 +325,7 @@
       const cfg = Store.config(), tbs = cfg.tables || [];
       const base = baseUrl(), notPublic = /^(file:|http:\/\/(localhost|127\.|192\.168\.|10\.))/.test(base);
       box.innerHTML = head('Mesas y códigos QR', '<button class="btn sm" id="printAll">🖨️ Imprimir todos los QR</button>') +
-        '<p class="a-sub">Cada mesa tiene su propio enlace y QR. Se imprime una sola vez: sigue funcionando aunque cambies precios o platos.</p>' +
+        '<p class="a-sub">Cada mesa tiene su propio enlace y QR, con una <b>clave secreta</b> dentro: así nadie puede pedir en una mesa sin haber escaneado su QR. Se imprime una sola vez: sigue funcionando aunque cambies precios o platos.</p>' +
         (notPublic ? '<div class="warn-box"><b>Estás en modo de prueba.</b> Los QR apuntarán a <code>' + esc(base) + '</code>, que solo funciona en este equipo. Escribe abajo la dirección real de tu menú (ej: https://tuusuario.github.io/menu/) antes de imprimir.</div>' : '') +
         '<div class="panel"><h3>Dirección pública del menú</h3><p class="help">Es la dirección donde publicaste el sistema (termina en la carpeta, sin index.html). Los QR se generan con ella.</p>' +
         '<div class="actions"><input type="url" id="pubUrl" value="' + esc(cfg.publicUrl || '') + '" placeholder="' + esc(base) + '" style="flex:1;min-width:200px;height:46px;border:1.5px solid var(--line);border-radius:12px;padding:0 12px;font-size:16px">' +
@@ -352,7 +352,7 @@
           '<div class="qr-card" data-id="' + esc(t.id) + '"><div class="qr">' + QRLib.svg(tableLink(t), 160) + '</div><h4>' + esc(t.label) + '</h4>' +
           '<div class="link-box"><input readonly value="' + esc(tableLink(t)) + '"><button class="btn sm" data-copy="' + esc(tableLink(t)) + '">Copiar</button></div>' +
           '<div class="actions"><button class="btn sm" data-png="' + esc(t.id) + '">Descargar QR</button><a class="btn sm" href="' + esc(tableLink(t)) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;text-decoration:none">Abrir</a>' +
-          '<button class="btn sm" data-ren>Renombrar</button><button class="btn sm danger" data-del>Quitar</button></div></div>').join('') + '</div>'
+          '<button class="btn sm" data-ren>Renombrar</button><button class="btn sm" data-renew title="Cambia la clave secreta de esta mesa">Renovar clave</button><button class="btn sm danger" data-del>Quitar</button></div></div>').join('') + '</div>'
           : '<div class="empty-box">Aún no hay mesas. Agrégalas arriba.</div>');
       bind();
     }
@@ -391,6 +391,8 @@
         const id = card.dataset.id, t = (Store.config().tables || []).find(x => x.id === id);
         if (e.target.closest('[data-del]')) {
           confirmBox('Vas a quitar «' + t.label + '». Su QR impreso dejará de funcionar.', 'Quitar').then(ok => { if (ok) saveData(d => { d.config.tables = d.config.tables.filter(x => x.id !== id); }, 'Mesa quitada').then(paint); });
+        } else if (e.target.closest('[data-renew]')) {
+          confirmBox('Se cambiará la clave secreta de «' + t.label + '». El QR impreso de esa mesa dejará de servir y tendrás que imprimir el nuevo. Úsalo si alguien que ya no está en el restaurante tiene el enlace.', 'Renovar clave').then(ok => { if (ok) Live.renewKey(id).then(() => { toast('Clave renovada ✓ · imprime el QR nuevo'); paint(); }); });
         } else if (e.target.closest('[data-ren]')) {
           const m = modal('<h3>Renombrar mesa</h3><form id="rf"><div class="f"><label>Nombre</label><input type="text" id="rN" maxlength="30" value="' + esc(t.label) + '"><small class="h">El enlace y el QR no cambian, solo el nombre que se muestra.</small></div>' +
             '<div class="m-foot"><button type="button" class="btn" data-cancel>Cancelar</button><button class="btn primary" type="submit">Guardar</button></div></form>');
@@ -400,6 +402,7 @@
       };
     }
     paint();
+    if (window.Live) Live.ensureKeys((Store.config().tables || []).map(t => t.id)).then(paint);   // crea la clave secreta de cada mesa
   };
 
   /* =====================================================

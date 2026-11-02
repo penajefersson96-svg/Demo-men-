@@ -51,6 +51,8 @@
     if (!m || m.type !== 'local' || !m.table) { isActive = false; sess = null; emit(); return; }
     if (!tableExists(m.table)) { isActive = false; emit(); invalidTable(m.table); return; }
 
+    if (!m.key) { isActive = false; emit(); needKey(m.table); return; }
+    Live.setKey(m.table, m.key);
     isActive = true;
     var saved = readMe();
     me = (saved && String(saved.tableId) === String(m.table)) ? saved : null;
@@ -78,6 +80,21 @@
     $('#mBack').addEventListener('click', function () { Store.mode.clear(); location.href = 'index.html'; });
   }
 
+  function needKey(id) {
+    ui.openSheet('<div class="sheet-pad name-sheet">' +
+      '<p class="eyebrow">' + esc(tableLabel(id)).toUpperCase() + '</p><h2>Escanea el QR de tu mesa</h2>' +
+      '<p class="muted">Este enlace no trae la clave de la mesa. Escanea el código QR que está en tu mesa, o pide en caja que te aparten la mesa y te den el suyo.</p>' +
+      '<button type="button" class="btn primary block" id="mBack">Ver el menú</button></div>', { cls: 'narrow', dismissible: false });
+    $('#mBack').addEventListener('click', function () { Store.mode.clear(); location.href = 'index.html'; });
+  }
+  function badKey() {
+    ui.openSheet('<div class="sheet-pad name-sheet">' +
+      '<h2>No pudimos abrir la mesa</h2>' +
+      '<p class="muted">El código de esta mesa no es válido o cambió. Escanea de nuevo el QR de tu mesa, o pide ayuda en caja.</p>' +
+      '<button type="button" class="btn primary block" id="mBack">Ver el menú</button></div>', { cls: 'narrow', dismissible: false });
+    $('#mBack').addEventListener('click', function () { Store.mode.clear(); location.href = 'index.html'; });
+  }
+
   function askName(tableId) {
     var c = Store.config();
     var node = ui.openSheet('<div class="sheet-pad name-sheet">' +
@@ -101,6 +118,9 @@
         ui.closeSheet();
         watch();
         emit();
+      }).catch(function (e) {
+        ui.closeSheet();
+        if (e && e.code === 'permission-denied') badKey(); else ui.toast('No se pudo entrar a la mesa. Intenta de nuevo.');
       });
     }
     $('#mGo', node).addEventListener('click', go);

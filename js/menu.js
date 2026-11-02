@@ -505,7 +505,13 @@
     var p = new URLSearchParams(location.search);
     var m = (p.get('modo') || p.get('mode') || '').toLowerCase();
     var mesa = p.get('mesa') || p.get('table') || '';
-    if (mesa) { Store.mode.set('local', mesa); return true; }
+    if (mesa) {
+      var k = p.get('k') || '', old = Store.mode.get();
+      if (!k && old && old.type === 'local' && String(old.table) === String(mesa)) k = old.key || '';
+      Store.mode.set('local', mesa, k);
+      try { history.replaceState(null, '', location.pathname); } catch (e) {}   // la clave no se queda a la vista en la barra
+      return true;
+    }
     if (m === 'delivery') { Store.mode.set('delivery', ''); return true; }
     if (m === 'local') {
       var cur = Store.mode.get();
