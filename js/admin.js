@@ -31,6 +31,18 @@
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600);
   }
 
+  /* estilos del equipo en teléfono (van aquí también para que no dependan de la caché del CSS) */
+  (function () {
+    const st = document.createElement('style');
+    st.textContent = '#staffBox{overflow-x:hidden}table.staff td{overflow-wrap:anywhere;word-break:break-word}' +
+      '@media (max-width:640px){table.staff,table.staff tbody,table.staff tr,table.staff td{display:block;width:100%}table.staff thead{display:none}' +
+      'table.staff tr{border:1.5px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:10px;background:#fff}' +
+      'table.staff td{border:0;padding:2px 0;text-align:left!important;white-space:normal!important}table.staff td:nth-child(2){color:var(--muted);font-size:13px}' +
+      'table.staff td:last-child{display:flex;gap:8px;margin-top:8px}table.staff td:last-child .btn{flex:1 1 0}}' +
+      '.m-box{box-sizing:border-box;overflow-x:hidden}.m-box input,.m-box select,.m-box textarea{max-width:100%;box-sizing:border-box}.m-foot{flex-wrap:wrap}.m-foot .btn{flex:1 1 120px}';
+    document.head.appendChild(st);
+  })();
+
   function modal(html) {
     const ov = document.createElement('div');
     ov.className = 'm-overlay';

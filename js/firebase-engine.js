@@ -148,7 +148,7 @@
      Firebase no deja que un administrador cambie la clave de OTRA persona desde el navegador, así que con clave nueva
      se crea una cuenta nueva con la misma identidad (usuario) y la anterior queda sin acceso. */
   function editStaff(u, o, m) {
-    var oldUid = Object.keys(m).filter(function (k) { return normUser(m[k].user) === u; })[0], cur = m[oldUid];
+    var olds = Object.keys(m).filter(function (k) { return normUser(m[k].user) === u; }), oldUid = olds[0], cur = m[oldUid];
     var role = ROLES.indexOf(o.role) >= 0 ? o.role : cur.role, name = o.name != null ? String(o.name) : (cur.name || '');
     var me = auth.currentUser;
     if (cur.role === 'admin' && role !== 'admin') {
@@ -168,11 +168,11 @@
     return sa.createUserWithEmailAndPassword(alias, o.pass).then(function (c) {
       uid = c.user.uid; return sa.signOut();
     }).then(function () {
+      return DB.set('logins', u, { email: alias, at: Date.now() });            // primero el acceso: si falla, no queda nada a medias
+    }).then(function () {
       return DB.set('staff', uid, { user: u, name: name, role: role, email: alias });
     }).then(function () {
-      return DB.set('logins', u, { email: alias, at: Date.now() });
-    }).then(function () {
-      return DB.remove('staff', oldUid);
+      return Promise.all(olds.map(function (k) { return DB.remove('staff', k); }));   // quita TODAS las fichas anteriores de ese usuario
     }).then(function () { return done().then(function () { return { message: 'Clave cambiada ✓ · ya puede entrar con la clave nueva' }; }); },
       function (e) { return done().then(function () { throw new Error(nice(e)); }); });
   }
@@ -214,9 +214,20 @@
 
     listStaff: function () {
       return DB.list('staff').then(function (m) {
-        return Object.keys(m).map(function (k) {
-          var d = m[k]; return { user: d.user, name: d.name, role: d.role, demoPass: false };
-        }).sort(function (a, b) { return a.user < b.user ? -1 : 1; });
+        /* si un usuario quedó repetido (un cambio de clave que se cortó a la mitad), se deja solo la ficha vigente */
+        var by = {}, jobs = [];
+        Object.keys(m).forEach(function (k) { (by[normUser(m[k].user)] = by[normUser(m[k].user)] || []).push(k); });
+        return Promise.all(Object.keys(by).filter(function (u) { return by[u].length > 1; }).map(function (u) {
+          return DB.get('logins', u).catch(function () { return null; }).then(function (lg) {
+            var ids = by[u], keep = ids.filter(function (k) { return lg && m[k].email === lg.email; })[0] ||
+              ids.filter(function (k) { return /\.[a-z0-9]+@/.test(m[k].email || ''); }).pop() || ids[ids.length - 1];
+            ids.forEach(function (k) { if (k !== keep) { delete m[k]; jobs.push(DB.remove('staff', k).catch(function () {})); } });
+          });
+        })).then(function () { return Promise.all(jobs); }).then(function () {
+          return Object.keys(m).map(function (k) {
+            var d = m[k]; return { user: d.user, name: d.name, role: d.role, demoPass: false };
+          }).sort(function (a, b) { return a.user < b.user ? -1 : 1; });
+        });
       });
     },
 
@@ -248,11 +259,11 @@
       var u = normUser(user);
       if (sess && normUser(sess.user) === u) return fail('No puedes quitar tu propio usuario.');
       return DB.list('staff').then(function (m) {
-        var uid = Object.keys(m).filter(function (k) { return normUser(m[k].user) === u; })[0];
+        var uids = Object.keys(m).filter(function (k) { return normUser(m[k].user) === u; }), uid = uids[0];
         if (!uid) return null;
-        var admins = Object.keys(m).filter(function (k) { return m[k].role === 'admin' && k !== uid; });
+        var admins = Object.keys(m).filter(function (k) { return m[k].role === 'admin' && uids.indexOf(k) < 0; });
         if (m[uid].role === 'admin' && !admins.length) throw new Error('Debe quedar al menos un administrador.');
-        return DB.remove('staff', uid).then(function () { return DB.remove('logins', u).catch(function () {}); });
+        return Promise.all(uids.map(function (k) { return DB.remove('staff', k); })).then(function () { return DB.remove('logins', u).catch(function () {}); });
       });
     },
 
