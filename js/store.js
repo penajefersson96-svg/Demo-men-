@@ -47,24 +47,38 @@
   var data = normalize(null);
   var lastJson = JSON.stringify(data);
 
+  /* Copia del menú en este teléfono: la próxima vez la carta aparece al instante y se actualiza por detrás.
+     (No se usa en el panel del administrador: ahí siempre se trabaja con lo último.) */
+  var CACHE_KEY = 'fogon_menu_cache_v1';
+  var useCache = DB.mode === 'firebase' && !/admin/i.test(location.pathname);
+  function cacheSave(doc) { if (useCache && doc) write(CACHE_KEY, doc); }
+
   function applyRemote(doc) {
     var next = normalize(doc);
     var j = JSON.stringify(next);
+    cacheSave(doc);
     if (j === lastJson) return;
     lastJson = j; data = next;
     emit('store:data');
   }
 
-  /* Store.ready: se cumple cuando ya se cargaron los datos. Todas las páginas esperan esto. */
-  var ready = DB.ready.then(function () { return DB.get('menu', 'main'); }).then(function (doc) {
+  /* Store.ready: se cumple cuando ya se cargaron los datos. Todas las páginas esperan esto.
+     Con copia guardada se cumple al instante y la versión nueva llega por detrás. */
+  var cached = useCache ? read(CACHE_KEY, null) : null;
+  var fresh = (DB.mode === 'firebase' ? DB.get('menu', 'main') : DB.ready.then(function () { return DB.get('menu', 'main'); })).then(function (doc) {
     if (!doc && DB.mode === 'local') {
       // primera vez en este navegador: se guarda el menú de ejemplo
       return DB.set('menu', 'main', clone(data)).then(function () { return null; });
     }
     if (doc) applyRemote(doc);
-  }).catch(function () { /* sin conexión: se queda con los datos de ejemplo */ }).then(function () {
+  }).catch(function () { /* sin conexión: se queda con los datos que haya */ }).then(function () {
     DB.watchDoc('menu', 'main', function (doc) { if (doc) applyRemote(doc); });
   });
+  var ready;
+  if (cached && cached.dishes) {
+    data = normalize(cached); lastJson = JSON.stringify(data);
+    ready = Promise.resolve();
+  } else ready = fresh;
 
   function save() {
     lastJson = JSON.stringify(data);

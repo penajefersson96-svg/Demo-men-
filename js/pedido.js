@@ -207,6 +207,7 @@
         '<p class="hint" id="regNote">' + (registered === true ? '✅ Tu pedido también quedó registrado en el restaurante.'
           : registered === false ? '⚠️ No pudimos registrarlo en el sistema del restaurante. Envía el WhatsApp: es lo que cuenta.' : 'Registrando tu pedido…') + '</p>' +
         '<a class="btn wa primary" id="doneWa" href="' + esc(url) + '" target="_blank" rel="noopener">' + O.I.chat + ' Abrir WhatsApp</a>' +
+        (/^https:\/\//i.test(Store.config().reviewUrl || '') ? '<a class="btn block" href="' + esc(Store.config().reviewUrl) + '" target="_blank" rel="noopener">⭐ Déjanos tu reseña en Google</a>' : '') +
         '<button type="button" class="btn block" id="doneEnd">Volver al menú</button>' +
       '</section>';
     window.scrollTo(0, 0);

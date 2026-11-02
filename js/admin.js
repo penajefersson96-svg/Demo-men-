@@ -436,6 +436,8 @@
       '<div class="f"><label for="nPay">Métodos de pago (uno por línea)</label><textarea id="nPay" style="min-height:130px">' + esc((c.paymentMethods || []).join('\n')) + '</textarea></div></div>' +
       '<div class="panel"><h3>Redes sociales</h3><p class="help">Solo se muestran las que llenes. Puedes poner el usuario o el enlace completo.</p>' +
       inp('nIg', 'Instagram', c.instagram, 'placeholder="usuario"') + inp('nTt', 'TikTok', c.tiktok, 'placeholder="usuario"') + inp('nFb', 'Facebook', c.facebook, 'placeholder="página o enlace"') + '</div>' +
+      '<div class="panel"><h3>Reseñas en Google</h3><p class="help">Si pones aquí el enlace de reseñas de tu local en Google, el menú muestra el botón «⭐ Déjanos tu reseña» y el cliente cae directo en la ventana para escribirla (debe iniciar sesión con su cuenta de Google). La reseña queda publicada en Google Maps.</p>' +
+      inp('nRev', 'Enlace para reseñas de Google', c.reviewUrl || '', 'placeholder="https://search.google.com/local/writereview?placeid=..." inputmode="url" autocapitalize="none"') + '</div>' +
       '<div class="actions end"><button class="btn primary lg" type="submit" style="padding:0 28px">Guardar cambios</button></div></form>';
 
     const logo = photoField($('#logoF'), c.logo === 'img/logo.svg' ? '' : c.logo);
@@ -449,7 +451,8 @@
           name, slogan: $('#nSlogan').value.trim(), address: $('#nAddr').value.trim(), logo: logo.get() || 'img/logo.svg',
           phone: $('#nPhone').value.trim(), whatsapp: $('#nWa').value.replace(/\D/g, ''), whatsappMessage: $('#nMsg').value.trim() || 'Hola, quiero hacer un pedido:',
           deliveryFee: Math.max(0, fee), paymentMethods: $('#nPay').value.split('\n').map(s => s.trim()).filter(Boolean),
-          instagram: $('#nIg').value.trim(), tiktok: $('#nTt').value.trim(), facebook: $('#nFb').value.trim()
+          instagram: $('#nIg').value.trim(), tiktok: $('#nTt').value.trim(), facebook: $('#nFb').value.trim(),
+          reviewUrl: /^https:\/\//i.test($('#nRev').value.trim()) ? $('#nRev').value.trim() : ''
         });
       }).then(() => { $('.a-head h1 small').textContent = name; });
     };

@@ -479,6 +479,7 @@
         (c.address ? '<p class="f-line">' + I.pin + '<span>' + esc(c.address) + '</span></p>' : '') +
         (c.phone ? '<p class="f-line">' + I.chat + '<span>' + esc(c.phone) + '</span></p>' : '') +
         (socials ? '<div class="socials center">' + socials + '</div>' : '') +
+        (/^https:\/\//i.test(c.reviewUrl || '') ? '<p style="text-align:center;margin-top:12px"><a class="btn" href="' + esc(c.reviewUrl) + '" target="_blank" rel="noopener">⭐ Déjanos tu reseña en Google</a></p>' : '') +
         '<div class="f-links">' +
           '<button type="button" data-about>Conócenos</button>' +
         '</div>' +
