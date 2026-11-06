@@ -30,10 +30,13 @@
   var DOMAIN = window.FIREBASE_STAFF_DOMAIN || 'personal.menu';
   var ROLES = ['admin', 'caja', 'cocina'];
 
-  firebase.initializeApp(cfg);
-  var fs = firebase.firestore();
+  /* Cada pantalla de personal (admin, caja, cocina) usa su propia «app» de Firebase, y por eso su propia sesión.
+     Así, entrar en la cocina no cierra ni cambia la sesión de la caja en el mismo teléfono (comparten el almacenamiento del sitio). */
+  var pm = /\/(admin|caja|cocina)(\.html)?\/?$/i.exec(location.pathname || '');
+  var fbApp = pm ? firebase.initializeApp(cfg, pm[1].toLowerCase()) : firebase.initializeApp(cfg);
+  var fs = fbApp.firestore();
   try { fs.settings({ experimentalAutoDetectLongPolling: true, ignoreUndefinedProperties: true }); } catch (e) {}
-  var auth = firebase.auth();
+  var auth = fbApp.auth();
 
   function clone(o) { return o == null ? o : JSON.parse(JSON.stringify(o)); }
   function ref(col, id) { return fs.collection(col).doc(String(id)); }
