@@ -94,6 +94,10 @@
         (r.value > 0 ? '<span class="chip-static">Tasa del día: <b>' + Store.fmtBs(r.value) + '</b> por $1</span>' : '') +
       '</div>';
 
+    var bg = heroBg(c.heroImage);                       // imagen de fondo del encabezado (opcional)
+    els.hero.classList.toggle('has-bg', !!bg);
+    if (bg) els.hero.style.setProperty('--hero-bg', 'url("' + bg + '")'); else els.hero.style.removeProperty('--hero-bg');
+
     $('#statusBtn').addEventListener('click', openHours);
     $('#modeBtn').addEventListener('click', function () { openGate(true); });
 
@@ -101,6 +105,12 @@
     banner.innerHTML = (!Store.canOrder() && currentModeType() !== 'local')
       ? '<div class="closed-banner">Estamos cerrados por ahora. Puedes ver el menú, pero los pedidos se habilitan cuando abramos.</div>'
       : '';
+  }
+
+  function heroBg(u) {
+    u = String(u || '').trim();
+    if (!/^(https:\/\/|data:image\/|img\/)/i.test(u)) return '';
+    return u.replace(/["\\\n\r]/g, function (ch) { return encodeURIComponent(ch); });
   }
 
   /* =====================================================

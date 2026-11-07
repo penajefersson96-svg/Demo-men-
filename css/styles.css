@@ -120,6 +120,17 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .social.round { width: 42px; height: 42px; padding: 0; justify-content: center; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); color: #fff; }
 .social.round:hover { background: var(--brand); border-color: var(--brand); color: #fff; }
 
+/* imagen de fondo del encabezado (la pone el administrador en Negocio → Identidad) */
+.hero.has-bg {
+  max-width: none; padding: 40px 16px 28px; color: #fff;
+  background: linear-gradient(rgba(24, 14, 9, .50), rgba(24, 14, 9, .78)), var(--hero-bg) center / cover no-repeat;
+}
+.hero.has-bg h1 { color: #fff; text-shadow: 0 2px 14px rgba(0, 0, 0, .45); }
+.hero.has-bg .slogan { color: rgba(255, 255, 255, .88); text-shadow: 0 1px 8px rgba(0, 0, 0, .45); }
+.hero.has-bg .meta-link { color: rgba(255, 255, 255, .9); text-shadow: 0 1px 8px rgba(0, 0, 0, .5); }
+.hero.has-bg .meta-link svg { color: #ffb48a; }
+.hero.has-bg .hero-logo { box-shadow: 0 8px 28px rgba(0, 0, 0, .45); }
+
 .hero-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 16px; }
 .chip-btn, .chip-static {
   display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 12px;
