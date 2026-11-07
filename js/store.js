@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var CART_KEY = 'fogon_cart_v1';
+  var CART_KEY = 'fogon_cart_v1', CART_AT_KEY = 'fogon_cart_at_v1';
   var MODE_KEY = 'fogon_mode_v1';
   var RATE_KEY = 'fogon_rate_v1';
 
@@ -215,7 +215,7 @@
 
   /* ---------- carrito ---------- */
   function cartItems() { return read(CART_KEY, []); }
-  function cartSave(items) { write(CART_KEY, items); emit('store:cart'); }
+  function cartSave(items) { write(CART_KEY, items); write(CART_AT_KEY, items.length ? Date.now() : 0); emit('store:cart'); }
 
   var cart = {
     items: cartItems,
@@ -235,6 +235,7 @@
     },
     remove: function (id) { cartSave(cartItems().filter(function (i) { return i.id !== id; })); },
     clear: function () { cartSave([]); },
+    age: function () { var t = read(CART_AT_KEY, 0); return t ? Date.now() - t : 0; },        // hace cuánto se tocó el carrito (0 = sin dato)
     lines: function () {
       var out = [];
       cartItems().forEach(function (i) {

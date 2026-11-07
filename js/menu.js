@@ -502,6 +502,34 @@
   /* =====================================================
      INICIO
      ===================================================== */
+  /* ---------- pedido a medias: si el cliente de delivery vuelve y quedó algo en su carrito, se le pregunta ---------- */
+  var ASK_KEY = 'fogon_cart_asked_v1', pendingAsk = false;
+  function startAskCart() {
+    var fresh = true;
+    try { fresh = !sessionStorage.getItem(ASK_KEY); sessionStorage.setItem(ASK_KEY, '1'); } catch (e) {}
+    if (!fresh) return;                                           // solo al abrir la página de nuevo, no en cada cambio de pantalla
+    if (Store.cart.age() > 12 * 3600 * 1000) { Store.cart.clear(); return; }   // un pedido de hace medio día ya no vale
+    pendingAsk = Store.cart.lines().length > 0;
+  }
+  function tryAskCart() {
+    var m = Store.mode.get();
+    if (!pendingAsk || inTable() || !m || m.type !== 'delivery') return;
+    var ls = Store.cart.lines(); pendingAsk = false;
+    if (!ls.length) return;
+    var t = Store.cart.totals();
+    var names = ls.slice(0, 3).map(function (l) { return '<li>' + l.qty + '× ' + esc(l.dish.name) + '</li>'; }).join('') +
+      (ls.length > 3 ? '<li>y ' + (ls.length - 3) + ' más…</li>' : '');
+    var node = openSheet('<div class="sheet-pad name-sheet">' +
+      '<h2>Tienes un pedido sin terminar</h2>' +
+      '<ul class="muted" style="text-align:left;margin:10px auto;max-width:300px;padding-left:20px">' + names + '</ul>' +
+      '<p class="muted"><b>' + Store.fmtUSD(t.usd) + '</b>' + (Store.rate().value > 0 ? ' · ' + Store.fmtBs(t.bs) : '') + '</p>' +
+      '<p class="muted">¿Quieres seguir con él o prefieres pedir otra cosa?</p>' +
+      '<button type="button" class="btn primary block" id="kpKeep">Continuar con mi pedido</button>' +
+      '<button type="button" class="btn block" id="kpNew" style="margin-top:8px">Empezar uno nuevo</button></div>', { cls: 'narrow', dismissible: false });
+    $('#kpKeep', node).addEventListener('click', function () { closeSheet(); });
+    $('#kpNew', node).addEventListener('click', function () { Store.cart.clear(); closeSheet(); toast('Pedido nuevo · el carrito está vacío'); });
+  }
+
   function readUrlMode() {
     var p = new URLSearchParams(location.search);
     var m = (p.get('modo') || p.get('mode') || '').toLowerCase();
@@ -537,6 +565,7 @@
     $('#iconCart').innerHTML = I.bag;
 
     var hasMode = readUrlMode();
+    startAskCart();
     renderAll();
     if (window.Mesa) Mesa.start(window.MenuUI);       // si es modo mesa, pide el nombre y se une
 
@@ -582,7 +611,7 @@
     window.addEventListener('store:data', renderAll);
     window.addEventListener('store:mode', function () {
       renderHero(); renderMenu();
-      setTimeout(function () { if (window.Mesa) Mesa.start(window.MenuUI); }, 0);
+      setTimeout(function () { if (window.Mesa) Mesa.start(window.MenuUI); tryAskCart(); }, 0);
     });
     window.addEventListener('mesa:change', function () { renderBadges(); renderCartBar(); });
 
@@ -599,6 +628,7 @@
 
     if (!hasMode) openGate(false);
     else if (new URLSearchParams(location.search).get('cambiar')) openGate(true);   // viene de "Cambiar" en el carrito
+    else setTimeout(tryAskCart, 300);
 
     if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
       navigator.serviceWorker.register('sw.js').catch(function () {});
