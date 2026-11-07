@@ -40,8 +40,14 @@
   /* =====================================================
      Inicio / fin
      ===================================================== */
+  var waitStops = [], waitTimer = null;
+  function stopWait() {
+    waitStops.forEach(function (f) { try { f(); } catch (e) {} }); waitStops = [];
+    if (waitTimer) { clearTimeout(waitTimer); waitTimer = null; }
+  }
   function stop() {
     if (unsub) { unsub(); unsub = null; }
+    stopWait();
   }
 
   function start(menuUI) {
@@ -51,13 +57,69 @@
     if (!m || m.type !== 'local' || !m.table) { isActive = false; sess = null; emit(); return; }
     if (!tableExists(m.table)) { isActive = false; emit(); invalidTable(m.table); return; }
 
-    if (!m.key) { isActive = false; emit(); needKey(m.table); return; }
-    Live.setKey(m.table, m.key);
+    if (!m.key) { isActive = false; emit(); openFlow(m.table); return; }   // QR fijo: la mesa se abre con la caja
+    begin(m.table, m.key);
+  }
+
+  /* entra a la mesa ya abierta, con su clave vigente */
+  function begin(table, key) {
+    Live.setKey(table, key);
     isActive = true;
     var saved = readMe();
-    me = (saved && String(saved.tableId) === String(m.table)) ? saved : null;
-    if (me) watch(); else askName(m.table);
+    me = (saved && String(saved.tableId) === String(table)) ? saved : null;
+    if (me) watch(); else askName(table);
     emit();
+  }
+
+  /* El QR de la mesa no lleva clave. Si la mesa está abierta se entra directo; si no, se avisa a la caja y se espera. */
+  function openFlow(table) {
+    Live.getOpen(table).then(function (o) {
+      if (o && o.key) { begin(table, o.key); return; }
+      clearMe();                                    // mesa cerrada: lo que quedara guardado de otra visita ya no vale
+      waitForStaff(table);
+    }).catch(function (e) {
+      if (window.console) console.warn('opentables', e && e.code);
+      waitForStaff(table);
+    });
+  }
+
+  function waitForStaff(table) {
+    stopWait();
+    var node = ui.openSheet('<div class="sheet-pad name-sheet">' +
+      '<p class="eyebrow">' + esc(tableLabel(table)).toUpperCase() + '</p><h2>Avisando al personal…</h2>' +
+      '<p class="muted" id="mWaitMsg">Ya le avisamos a la caja. En cuanto confirmen tu mesa podrás pedir desde tu celular. No cierres esta pantalla.</p>' +
+      '<button type="button" class="link-btn" id="mBack">Ver el menú</button></div>', { cls: 'narrow', dismissible: false });
+    $('#mBack', node).addEventListener('click', function () { stopWait(); Store.mode.clear(); location.href = 'index.html'; });
+
+    function opened(o) {
+      if (!o || !o.key) return;
+      stopWait(); ui.closeSheet(); begin(table, o.key);
+    }
+    Live.requestOpen(table).then(function () {
+      waitStops.push(Live.watchOpen(table, opened));
+      waitStops.push(Live.watchRequest(table, function (r) { if (r && r.status === 'rejected') declined(table); }));
+      waitTimer = setTimeout(function () {
+        var el = $('#mWaitMsg'); if (el) el.textContent = '¿Tarda mucho? Llama a un mesero y dile que escaneaste el QR de tu mesa.';
+      }, 60000);
+    }).catch(function (e) {
+      stopWait(); ui.closeSheet();
+      ui.openSheet('<div class="sheet-pad name-sheet"><h2>No pudimos avisar a la caja</h2>' +
+        '<p class="muted">Revisa tu internet e inténtalo de nuevo, o pide ayuda a un mesero.</p>' +
+        '<button type="button" class="btn primary block" id="mRetry">Intentar de nuevo</button>' +
+        '<button type="button" class="link-btn" id="mBack2">Ver el menú</button></div>', { cls: 'narrow', dismissible: false });
+      $('#mRetry').addEventListener('click', function () { ui.closeSheet(); openFlow(table); });
+      $('#mBack2').addEventListener('click', function () { Store.mode.clear(); location.href = 'index.html'; });
+    });
+  }
+
+  function declined(table) {
+    stopWait(); ui.closeSheet();
+    ui.openSheet('<div class="sheet-pad name-sheet"><h2>La caja no pudo confirmar tu mesa</h2>' +
+      '<p class="muted">Pide ayuda a un mesero para que te abra la mesa.</p>' +
+      '<button type="button" class="btn primary block" id="mRetry">Intentar de nuevo</button>' +
+      '<button type="button" class="link-btn" id="mBack2">Ver el menú</button></div>', { cls: 'narrow', dismissible: false });
+    $('#mRetry').addEventListener('click', function () { ui.closeSheet(); openFlow(table); });
+    $('#mBack2').addEventListener('click', function () { Store.mode.clear(); location.href = 'index.html'; });
   }
 
   function watch() {

@@ -8,7 +8,7 @@
    • NO guarda pedidos, mesas ni datos de clientes: eso nunca pasa por aquí.
    • Cuando cambies muchos archivos, sube el número de VERSION para limpiar lo viejo.
    ===================================================== */
-var VERSION = 'fogon-v6';
+var VERSION = 'fogon-v8';
 var SHELL = VERSION + '-shell';
 var IMGS = VERSION + '-img';
 var FONTS = VERSION + '-fonts';

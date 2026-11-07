@@ -21,6 +21,7 @@
   var shift = null;             // turno del día
   var tab = 'pend';
   var soundOn = false, actx = null;
+  var reqs = {};                // clientes que escanearon el QR y esperan que se abra su mesa
   var seen = null;              // avisos ya vistos (para sonar solo con los nuevos)
   var unsubs = [];
 
@@ -97,7 +98,11 @@
      Qué hay pendiente
      ===================================================== */
   function collect() {
-    var out = { bills: [], calls: [], news: [], ready: [], going: [] };
+    var out = { opens: [], bills: [], calls: [], news: [], ready: [], going: [] };
+    Object.keys(reqs || {}).forEach(function (t) {
+      var r = reqs[t];
+      if (r && r.status === 'pending' && Date.now() - (r.at || 0) < 15 * 60000) out.opens.push({ tid: String(t), at: r.at, s: sessions[String(t)] || null });
+    });
     Object.keys(sessions).forEach(function (tid) {
       var s = sessions[tid];
       if (s.calls && s.calls.bill) out.bills.push({ tid: tid, s: s, at: s.calls.bill.at });
@@ -109,17 +114,18 @@
         else if (r.status === 'accepted' || r.status === 'cooking') out.going.push(o);
       });
     });
-    ['bills', 'calls', 'news', 'ready', 'going'].forEach(function (k) {
+    ['opens', 'bills', 'calls', 'news', 'ready', 'going'].forEach(function (k) {
       out[k].sort(function (a, b) { return (a.at || 0) - (b.at || 0); });
     });
     return out;
   }
 
-  function pendingCount(c) { return c.bills.length + c.calls.length + c.news.length + c.ready.length; }
+  function pendingCount(c) { return c.opens.length + c.bills.length + c.calls.length + c.news.length + c.ready.length; }
 
   /* detecta avisos nuevos para sonar y marcar la pestaña del navegador */
   function detectNew(c) {
     var keys = [];
+    c.opens.forEach(function (o) { keys.push('o:' + o.tid + ':' + o.at); });
     c.bills.forEach(function (o) { keys.push('b:' + o.tid + ':' + o.at); });
     c.calls.forEach(function (o) { keys.push('c:' + o.tid + ':' + o.at); });
     c.news.forEach(function (o) { keys.push('n:' + o.tid + ':' + o.r.n); });
@@ -161,6 +167,7 @@
     $('#cjMain').addEventListener('click', onClick);
 
     unsubs.push(Live.watchAll(function (all) { sessions = all || {}; paint(); }));
+    unsubs.push(Live.watchRequests(function (all) { reqs = all || {}; paint(); }));
     unsubs.push(Live.watchShift(function (sh) { shift = sh; paint(); }));
     if (window.CajaCierre) CajaCierre.start();
     if (window.CajaDelivery) CajaDelivery.start();
@@ -232,6 +239,13 @@
         '<button type="button" class="cj-link" data-tab="turno">Armar el turno</button></div>';
     }
 
+    c.opens.forEach(function (o) {
+      html += '<section class="cj-card new"><header><h3>🔑 ' + esc(tableLabel(o.tid)) + ' quiere abrir</h3><span class="cj-ago">' + ago(o.at) + '</span></header>' +
+        '<p class="cj-hint">Un cliente escaneó el QR de esta mesa.' + (o.s ? ' <b>Ya hay clientes en la mesa</b>: acepta solo si es alguien de ellos.' : ' Acepta solo si hay clientes sentados.') + '</p>' +
+        '<div class="cj-actions"><button type="button" class="cj-btn primary lg" data-a="open-ok" data-t="' + esc(o.tid) + '">✅ Aceptar y abrir mesa</button>' +
+        '<button type="button" class="cj-btn" data-a="open-no" data-t="' + esc(o.tid) + '">Rechazar</button></div></section>';
+    });
+
     c.bills.forEach(function (o) {
       html += '<section class="cj-card bill"><header><h3>🧾 ' + esc(tableLabel(o.tid)) + ' pidió la cuenta</h3><span class="cj-ago">' + ago(o.at) + '</span></header>' +
         '<div class="cj-total">' + usdBs(tableTotal(o.s)) + '</div>' + waiterChip(o.s) +
@@ -263,7 +277,7 @@
     });
 
     if (!pendingCount(c)) {
-      html += '<div class="cj-empty"><div>☕</div><h3>Todo al día</h3><p>Cuando una mesa pida, llame al mesero o pida la cuenta, aparecerá aquí.</p></div>';
+      html += '<div class="cj-empty"><div>☕</div><h3>Todo al día</h3><p>Cuando una mesa se abra, pida, llame al mesero o pida la cuenta, aparecerá aquí.</p></div>';
     }
 
     if (c.going.length) {
@@ -365,6 +379,8 @@
     else if (a === 'served') Live.setRoundStatus(t, r, 'served').then(function () { toast('Marcado como entregado'); });
     else if (a === 'call-done') Live.dismissCall(t, 'waiter');
     else if (a === 'cancel-bill') Live.dismissCall(t, 'bill');
+    else if (a === 'open-ok') Live.openTable(t).then(function () { toast(tableLabel(t) + ' abierta'); }).catch(function (e) { toast('No se pudo abrir la mesa' + (e && e.code ? ' (' + e.code + ')' : '')); });
+    else if (a === 'open-no') Live.rejectRequest(t).then(function () { toast('Solicitud rechazada'); });
     else if (a === 'release') confirmRelease(t);
     else if (a === 'pay' && window.CajaCierre) CajaCierre.openPay(t);
     else if (window.CajaDelivery && CajaDelivery.onAction(a, b)) { /* lo atendió el delivery */ }
@@ -413,7 +429,7 @@
       '<button type="button" class="cj-btn primary" data-x="ok">Sí, liberar mesa</button></div>');
     m.addEventListener('click', function (e) {
       var b = e.target.closest('[data-x]'); if (!b) return;
-      if (b.dataset.x === 'ok') Live.release(tid).then(function () { toast(tableLabel(tid) + ' liberada'); });
+      if (b.dataset.x === 'ok') Live.release(tid).then(function () { toast(tableLabel(tid) + ' liberada · cerrada'); });
       closeModal();
     });
   }
@@ -428,9 +444,9 @@
     var tid = detailId, s = sessions[tid];
     if (!s) {
       box.innerHTML = '<button type="button" class="cj-x" data-x="close" aria-label="Cerrar">✕</button><h3>' + esc(tableLabel(tid)) + '</h3>' +
-        '<p><span class="cj-pill ok">Libre</span></p><p class="cj-hint">Se ocupa sola cuando un cliente escanea el QR de la mesa. Si un cliente <b>no puede escanear</b>, ábrele la mesa a mano: el cliente llama al mesero para todo y tú registras el pedido aquí.</p>' +
+        '<p><span class="cj-pill ok">Libre</span></p><p class="cj-hint">Cuando un cliente escanee el QR de la mesa, te llegará un aviso para aceptarlo (o puedes abrirla tú con el botón de abajo). Si un cliente <b>no puede escanear</b>, ábrele la mesa a mano: el cliente llama al mesero para todo y tú registras el pedido aquí.</p>' +
         '<label class="cj-lbl" for="cjResName">Nombre del cliente (opcional)</label><input id="cjResName" class="cj-select" type="text" maxlength="30" placeholder="Ej: Sr. Pérez" autocomplete="off">' +
-        '<div class="cj-actions"><button type="button" class="cj-btn primary" data-x="reserve">🪑 Abrir mesa manual</button></div>';
+        '<div class="cj-actions"><button type="button" class="cj-btn primary" data-x="openok">✅ Abrir mesa para clientes</button><button type="button" class="cj-btn" data-x="reserve">🪑 Abrir mesa manual</button><button type="button" class="cj-btn" data-x="qr">🔑 Ver QR de la mesa</button></div>';
     } else {
       var people = Object.keys(s.people || {}).map(function (k) { return s.people[k].name; });
       var opts = shiftList().map(function (w) {
@@ -469,6 +485,11 @@
       if (b.dataset.x === 'close') closeModal();
       else if (b.dataset.x === 'call') Live.dismissCall(tid, 'waiter');
       else if (b.dataset.x === 'qr') showQR(tid);
+      else if (b.dataset.x === 'openok') {
+        b.disabled = true;
+        Live.openTable(tid).then(function () { toast(tableLabel(tid) + ' abierta: los clientes ya pueden escanear el QR'); closeModal(); })
+          .catch(function (e) { b.disabled = false; toast('No se pudo abrir la mesa' + (e && e.code ? ' (' + e.code + ')' : '')); });
+      }
       else if (b.dataset.x === 'reserve') {
         var nm = ($('#cjResName', box) || {}).value || '';
         b.disabled = true;
@@ -486,13 +507,12 @@
     var u = (Store.config().publicUrl || '').trim();
     if (!u) u = location.href.replace(/[#?].*$/, '').replace(/[^\/]*$/, '');
     if (!/\/$/.test(u)) u += '/';
-    return u + 'index.html?modo=local&mesa=' + encodeURIComponent(tid) + '&k=' + encodeURIComponent(Live.keyFor(tid));
+    return u + 'index.html?modo=local&mesa=' + encodeURIComponent(tid);
   }
   function showQR(tid) {
-    if (!Live.keyFor(tid)) { toast('La clave de la mesa aún no está lista. Intenta de nuevo en unos segundos.'); return; }
     var link = tableLink(tid), qr = window.QRLib ? QRLib.svg(link, 260) : '';
     var m = modal('<button type="button" class="cj-x" data-x="close" aria-label="Cerrar">✕</button><h3>' + esc(tableLabel(tid)) + ' · QR</h3>' +
-      '<p class="cj-hint">El cliente escanea este código con la cámara de su celular y entra a su mesa. No lo compartas con otras personas.</p>' +
+      '<p class="cj-hint">Es el mismo QR que está pegado en la mesa y no cambia. Cuando el cliente lo escanee, te llegará un aviso para aceptar su mesa.</p>' +
       '<div style="display:grid;place-items:center;padding:8px 0;background:#fff;border-radius:14px">' + qr + '</div>' +
       '<div class="cj-actions"><button type="button" class="cj-btn" data-x="copy">Copiar enlace</button>' +
       '<a class="cj-btn" style="display:grid;place-items:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent('Tu mesa: ' + link) + '">Enviar por WhatsApp</a>' +

@@ -24,7 +24,7 @@
   /* ---------- clave secreta por mesa ----------
      Cada mesa tiene un código (colección «tablekeys», solo lo lee el personal) que va dentro del QR.
      La mesa se guarda en el documento «<mesa>_<código>»: sin el código no se puede ni encontrar ni escribir. */
-  var KEYS_COL = 'tablekeys', keys = {}, known = {};
+  var KEYS_COL = 'tablekeys', OPEN_COL = 'opentables', REQ_COL = 'tablereq', keys = {}, known = {}, keysWatching = false;
   var ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   function genKey() {
     var out = '', a = new Uint32Array(8);
@@ -104,6 +104,10 @@
       return DB.list(KEYS_COL).then(function (all) {
         var jobs = [];
         Object.keys(all || {}).forEach(function (t) { if (all[t] && all[t].key) keys[t] = all[t].key; });
+        if (!keysWatching && DB.watchCollection) {           // si otra caja renueva una clave, esta se entera sola
+          keysWatching = true;
+          try { DB.watchCollection(KEYS_COL, function (cur) { Object.keys(cur || {}).forEach(function (t) { if (cur[t] && cur[t].key) keys[t] = cur[t].key; }); }); } catch (e) { keysWatching = false; }
+        }
         (tableIds || []).forEach(function (t) {
           t = String(t);
           if (keys[t]) return;
@@ -242,8 +246,40 @@
         return true;
       });
     },
-    release: function (tableId) {                        // libera la mesa y BORRA todos sus datos
-      return DB.remove(COL, docId(tableId));
+    /* libera la mesa: la CIERRA (los clientes ya no pueden entrar con el QR), cambia la clave interna
+       y BORRA todos sus datos. El QR impreso no cambia; la próxima vez la caja tiene que aceptar la mesa. */
+    release: function (tableId) {
+      var t = String(tableId), id = docId(t);
+      return DB.remove(OPEN_COL, t).catch(function (e) { if (window.console) console.warn('opentables', e && e.code); })
+        .then(function () { return Live.renewKey(t).catch(function (e) { if (window.console) console.warn('renewKey', e && e.code); return null; }); })
+        .then(function () { return DB.remove(REQ_COL, t).catch(function () {}); })
+        .then(function () { return DB.remove(COL, id); });
+    },
+    /* ---------- abrir una mesa: el cliente escanea el QR fijo y la caja acepta ---------- */
+    getOpen: function (tableId) { return DB.get(OPEN_COL, String(tableId)); },
+    watchOpen: function (tableId, cb) { return DB.watchDoc(OPEN_COL, String(tableId), cb); },
+    requestOpen: function (tableId) {                  // el cliente pide que abran su mesa
+      var t = String(tableId);
+      return DB.set(REQ_COL, t, { tableId: t, at: Date.now(), status: 'pending' });
+    },
+    watchRequest: function (tableId, cb) { return DB.watchDoc(REQ_COL, String(tableId), cb); },
+    watchRequests: function (cb) { return DB.watchCollection(REQ_COL, cb); },    // la caja ve todas
+    /* la caja abre la mesa: publica su clave para quien escanee el QR mientras esté abierta */
+    openTable: function (tableId) {
+      var t = String(tableId);
+      return Live.ensureKeys([t]).then(function () { return Live.refreshKey(t); }).then(function (k) {
+        if (!k) throw new Error('La clave de la mesa aún no está lista. Intenta de nuevo.');
+        return DB.set(OPEN_COL, t, { key: k, at: Date.now() });
+      }).then(function () { return DB.remove(REQ_COL, t).catch(function () {}); });
+    },
+    rejectRequest: function (tableId) {
+      var t = String(tableId);
+      return DB.set(REQ_COL, t, { tableId: t, at: Date.now(), status: 'rejected' });
+    },
+    /* lee la clave vigente de una mesa (por si otra caja la cambió) */
+    refreshKey: function (tableId) {
+      var t = String(tableId);
+      return DB.get(KEYS_COL, t).then(function (d) { if (d && d.key) keys[t] = d.key; return keys[t] || ''; }).catch(function () { return keys[t] || ''; });
     },
     purgeOlderThan: function (hours) {                   // limpieza de mesas abandonadas
       return DB.list(COL).then(function (all) {
