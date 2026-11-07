@@ -62,12 +62,13 @@
   }
 
   function totals(list) {
-    var t = { orders: 0, totalUSD: 0, totalBs: 0, by: {}, change: { usd: 0, bs: 0 }, voids: { n: 0, usd: 0 }, from: 0, delivery: { n: 0, usd: 0 } };
+    var t = { orders: 0, totalUSD: 0, totalBs: 0, by: {}, change: { usd: 0, bs: 0 }, voids: { n: 0, usd: 0 }, from: 0, delivery: { n: 0, usd: 0 }, tips: { usd: 0, byWaiter: {} } };
     METHODS.forEach(function (m) { t.by[m.id] = { n: 0, amt: 0, usd: 0 }; });
     list.forEach(function (s) {
       if (s.void) { t.voids.n++; t.voids.usd += s.totalUSD; return; }
       t.orders++; t.totalUSD += s.totalUSD; t.totalBs += s.totalBs;
       if (s.source === 'delivery') { t.delivery.n++; t.delivery.usd += s.totalUSD; }
+      if (s.tipUSD > 0) { var wn = s.waiter || 'Sin mesero asignado'; t.tips.usd += s.tipUSD; t.tips.byWaiter[wn] = (t.tips.byWaiter[wn] || 0) + s.tipUSD; }
       if (!t.from || s.at < t.from) t.from = s.at;
       (s.payments || []).forEach(function (p) { var b = t.by[p.m]; if (b) { b.n++; b.amt += p.amt; b.usd += p.usd; } });
       if (s.change && t.change[s.change.m] != null) t.change[s.change.m] += s.change.amt;
@@ -75,6 +76,7 @@
     t.totalUSD = r2(t.totalUSD); t.totalBs = r2(t.totalBs); t.delivery.usd = r2(t.delivery.usd); t.voids.usd = r2(t.voids.usd);
     METHODS.forEach(function (m) { t.by[m.id].amt = r2(t.by[m.id].amt); t.by[m.id].usd = r2(t.by[m.id].usd); });
     t.change.usd = r2(t.change.usd); t.change.bs = r2(t.change.bs);
+    t.tips.usd = r2(t.tips.usd); Object.keys(t.tips.byWaiter).forEach(function (k) { t.tips.byWaiter[k] = r2(t.tips.byWaiter[k]); });
     t.expected = { usd: r2(t.by.usd.amt - t.change.usd), bs: r2(t.by.bs.amt - t.change.bs) };
     return t;
   }
@@ -87,19 +89,32 @@
     if (!s) { K.toast('Esa mesa ya no está ocupada.'); return; }
     var total = r2(K.tableTotal(s));
     if (!(total > 0)) { K.toast('Esta mesa no tiene consumo. Usa «Liberar sin cobrar».'); return; }
+    var cfg = Store.config(), asked = s.calls && s.calls.bill && s.calls.bill.tip;
+    var opts = (Array.isArray(cfg.tipOptions) && cfg.tipOptions.length ? cfg.tipOptions : [10, 15, 20]).map(Number).filter(function (n) { return n > 0 && n <= 100; }).slice(0, 4);
+    if (!opts.length) opts = [10, 15, 20];
     payDialog({
       title: 'Cobrar · ' + K.tableLabel(tid), total: total, doneMsg: 'Cobrado · ' + K.tableLabel(tid) + ' liberada',
-      onConfirm: function (got, change, rate) { return paySale(tid, total, rate, got, change); }
+      tip: cfg.tipEnabled === false ? null : { waiter: s.waiter ? s.waiter.name : '', options: opts, pct: (asked && asked.pct) || 0, usd: (asked && asked.usd) || 0, fromCustomer: !!asked },
+      onConfirm: function (got, change, rate, tip) { return paySale(tid, total, rate, got, change, tip); }
     });
   }
 
   /* ventana de cobro (sirve para mesas y para delivery)
      o = { title, hint, total (USD), doneMsg, onConfirm(got, change, rate) → promesa } */
   function payDialog(o) {
-    var total = r2(o.total), rate = Store.rate().value || 0;
+    var base = r2(o.total), total = base, tipUSD = 0, rate = Store.rate().value || 0;
+    var TO = o.tip || null, tipPct = 0, tipOther = false, tipVal = '';
+    if (TO) { if (TO.pct > 0) tipPct = TO.pct; else if (TO.usd > 0) { tipOther = true; tipVal = String(TO.usd); } }
+    var tipOpts = TO ? TO.options.slice() : [];
+    if (TO && tipPct > 0 && tipOpts.indexOf(tipPct) < 0) tipOpts.push(tipPct);
+    var tipHTML = !TO ? '' : '<div class="pay-tip"><p class="cj-lbl">Propina' + (TO.waiter ? ' para ' + esc(TO.waiter) : '') + (TO.fromCustomer ? ' · la eligió el cliente' : '') + '</p>' +
+      '<div class="pay-chips" id="payTipChips"><button type="button" class="cj-btn sm' + (!tipOther && !tipPct ? ' primary' : '') + '" data-ptip="0">Sin propina</button>' +
+      tipOpts.map(function (p) { return '<button type="button" class="cj-btn sm' + (!tipOther && tipPct === p ? ' primary' : '') + '" data-ptip="' + p + '">' + p + '%</button>'; }).join('') +
+      '<button type="button" class="cj-btn sm' + (tipOther ? ' primary' : '') + '" data-ptip="other">Otro monto</button></div>' +
+      '<input id="payTipInp" type="text" inputmode="decimal" placeholder="Propina en $" autocomplete="off" value="' + esc(tipVal) + '"' + (tipOther ? '' : ' hidden') + ' style="margin-top:8px"></div>';
     var m = K.modal('<button type="button" class="cj-x" data-x="close" aria-label="Cerrar">✕</button>' +
       '<h3>' + esc(o.title) + '</h3>' + (o.hint ? '<p class="cj-hint"><b>' + esc(o.hint) + '</b></p>' : '') +
-      '<div class="pay-total"><b>' + usd(total) + '</b>' + (rate > 0 ? '<span>' + bs(total * rate) + '</span>' : '') + '</div>' +
+      '<div class="pay-total" id="payTot"></div><p class="cj-hint" id="payBrk" style="margin:0 0 6px"></p>' + tipHTML +
       (rate > 0 ? '<p class="cj-hint">Tasa: Bs ' + rate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' por $1</p>'
                 : '<div class="cj-alert warn">No hay tasa del dólar. Solo puedes cobrar en dólares hasta que la pongas en el panel (pestaña Tasa).</div>') +
       '<p class="cj-hint">Escribe lo que recibiste. Si pagan combinado, llena varios. Toca «Todo» para completar lo que falta.</p>' +
@@ -122,7 +137,17 @@
       });
       return { lines: lines, got: got };
     }
+    function syncTip() {
+      if (TO) {
+        var inp = $('#payTipInp', m);
+        tipUSD = tipOther ? r2(num(inp ? inp.value : tipVal)) : r2(base * tipPct / 100);
+        total = r2(base + tipUSD);
+      }
+      $('#payTot', m).innerHTML = '<b>' + usd(total) + '</b>' + (rate > 0 ? '<span>' + bs(total * rate) + '</span>' : '');
+      $('#payBrk', m).textContent = tipUSD > 0 ? 'Consumo ' + usd(base) + ' + propina ' + usd(tipUSD) : '';
+    }
     function recalc() {
+      syncTip();
       var r = read(), diff = r2(r.got - total), ok = r.got > 0 && diff >= -0.005;
       var sum = $('#paySum', m);
       sum.className = 'pay-sum ' + (ok ? 'ok' : 'miss');
@@ -141,6 +166,13 @@
     m.addEventListener('input', recalc);
     m.addEventListener('change', function (e) { if (e.target.name === 'chM') recalc(); });
     m.addEventListener('click', function (e) {
+      var tc = e.target.closest('[data-ptip]');
+      if (tc) {
+        [].forEach.call(m.querySelectorAll('[data-ptip]'), function (x) { x.classList.toggle('primary', x === tc); });
+        tipOther = tc.dataset.ptip === 'other'; tipPct = tipOther ? 0 : Number(tc.dataset.ptip) || 0;
+        var ti = $('#payTipInp', m); ti.hidden = !tipOther; if (tipOther) ti.focus();
+        recalc(); return;
+      }
       var all = e.target.closest('[data-all]');
       if (all) {
         var x = MBYID[all.dataset.all], inp = $('#pay_' + x.id, m);
@@ -158,7 +190,7 @@
         change = { m: cm, amt: cm === 'usd' ? diff : r2(diff * rate) };
       }
       var btn = $('#payOk', m); btn.disabled = true; btn.textContent = 'Guardando…';
-      o.onConfirm(r, change, rate).then(function () {
+      o.onConfirm(r, change, rate, TO ? { usd: tipUSD, pct: tipOther ? 0 : tipPct } : null).then(function () {
         K.closeModal(); K.toast(o.doneMsg || 'Cobrado');
       }).catch(function (ex) { K.toast(ex.message || 'No se pudo registrar el cobro.'); K.closeModal(); });
     }
@@ -166,7 +198,7 @@
     recalc();
   }
 
-  function paySale(tid, total, rate, got, change) {
+  function paySale(tid, total, rate, got, change, tip) {
     var s = K.sessions()[tid];
     if (!s) return Promise.reject(new Error('La mesa ya fue cobrada.'));
     var who = me(), plates = 0;
@@ -176,7 +208,8 @@
       id: id, tableId: String(tid), tableLabel: K.tableLabel(tid), waiter: s.waiter ? s.waiter.name : '',
       caja: { id: who.id, name: who.name }, at: Date.now(), day: Live.dayKey(), rate: rate,
       totalUSD: total, totalBs: r2(total * rate), plates: plates, payments: got.lines, receivedUSD: r2(got.got),
-      change: change, void: false, source: 'mesa'
+      change: change, void: false, source: 'mesa',
+      tipUSD: tip && tip.usd > 0 ? r2(tip.usd) : 0, tipPct: tip && tip.pct > 0 ? tip.pct : 0
     };
     var created = false;
     if (sales[id]) return Promise.reject(new Error('Esta cuenta ya fue cobrada desde otra caja.'));
@@ -198,7 +231,7 @@
   function payDelivery(d) {
     payDialog({
       title: 'Cobrar · Delivery #' + d.code, total: d.totalUSD, hint: d.pay ? 'El cliente indicó: ' + d.pay : '',
-doneMsg: 'Cobrado · Delivery #' + d.code + (Store.config().kitchenEnabled !== false ? ' enviado a cocina' : ' listo para despachar'),
+      doneMsg: 'Cobrado · Delivery #' + d.code + (Store.config().kitchenEnabled !== false ? ' enviado a cocina' : ' listo para despachar'),
       onConfirm: function (got, change, rate) {
         var who = me(), id = 'v' + d.id, created = false;
         var sale = {
@@ -208,7 +241,8 @@ doneMsg: 'Cobrado · Delivery #' + d.code + (Store.config().kitchenEnabled !== f
         };
         return DB.update('sales', id, function (cur) { created = false; if (cur) return undefined; created = true; return sale; }).then(function () {
           if (!created) throw new Error('Este pedido ya fue cobrado desde otra caja.');
-return Delivery.setStatus(d.id, Store.config().kitchenEnabled !== false ? 'accepted' : 'ready', { paid: true });
+          /* ya cobrado: pasa a la cocina (o queda listo si no hay cocina); se borra cuando la caja lo marca «enviado» */
+          return Delivery.setStatus(d.id, Store.config().kitchenEnabled !== false ? 'accepted' : 'ready', { paid: true });
         });
       }
     });
@@ -247,6 +281,10 @@ return Delivery.setStatus(d.id, Store.config().kitchenEnabled !== false ? 'accep
         '<tr class="sep"><td>Vuelto entregado</td><td class="r">' + (t.change.usd ? '−' + usd(t.change.usd) : '') + (t.change.usd && t.change.bs ? ' · ' : '') + (t.change.bs ? '−' + bs(t.change.bs) : '') + (!t.change.usd && !t.change.bs ? '—' : '') + '</td><td></td></tr>' +
         (t.voids.n ? '<tr><td>Ventas anuladas</td><td class="r">' + t.voids.n + ' · ' + usd(t.voids.usd) + '</td><td></td></tr>' : '') +
         '</tbody></table></div>' +
+        (t.tips.usd > 0 ? '<div class="cc-card"><h4>🙌 Propinas por entregar</h4><table class="cc-t"><tbody>' +
+          Object.keys(t.tips.byWaiter).sort().map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="r">' + usd(t.tips.byWaiter[k]) + '</td></tr>'; }).join('') +
+          '<tr class="sep"><td><b>Total</b></td><td class="r"><b>' + usd(t.tips.usd) + '</b></td></tr></tbody></table>' +
+          '<p class="cj-hint">Ya están incluidas en lo cobrado y en el efectivo de abajo. Sepáralas y entrégale a cada mesero lo suyo.</p></div>' : '') +
         '<div class="cc-card"><h4>Efectivo que debe haber en caja</h4>' +
         '<div class="cc-exp"><span>Dólares: <b>' + usd(t.expected.usd) + '</b></span><span>Bolívares: <b>' + bs(t.expected.bs) + '</b></span></div>' +
         '<p class="cj-hint">Opcional: escribe lo que contaste para ver si cuadra.</p>' +
@@ -256,7 +294,7 @@ return Delivery.setStatus(d.id, Store.config().kitchenEnabled !== false ? 'accep
         '<h4 class="cj-sub">Ventas por cerrar (' + list.length + ')</h4><div class="cj-list">' + list.slice().reverse().map(function (s) {
           return '<div class="cj-line' + (s.void ? ' void' : '') + '"><div><b>' + (s.num && s.source !== 'delivery' ? '#' + s.num + ' · ' : '') + esc(s.tableLabel) + '</b> · ' + hhmm(s.at) +
             '<small>' + (s.payments || []).map(function (p) { return (MBYID[p.m] || {}).icon + ' ' + (MBYID[p.m] || {}).label; }).join(' + ') + (s.void ? ' · ANULADA' : '') + '</small></div>' +
-            '<b>' + usd(s.totalUSD) + '</b>' + (s.void ? '' : '<button type="button" class="cj-btn sm danger" data-a="cc-void" data-id="' + esc(s.id) + '">Anular</button>') + '</div>';
+            '<b>' + usd(s.totalUSD) + (s.tipUSD > 0 ? '<small style="display:block;font-weight:400">+ propina ' + usd(s.tipUSD) + '</small>' : '') + '</b>' + (s.void ? '' : '<button type="button" class="cj-btn sm danger" data-a="cc-void" data-id="' + esc(s.id) + '">Anular</button>') + '</div>';
         }).join('') + '</div>';
     }
 
@@ -317,7 +355,7 @@ return Delivery.setStatus(d.id, Store.config().kitchenEnabled !== false ? 'accep
     var hasCount = String(counted.usd).trim() !== '' || String(counted.bs).trim() !== '';
     var cl = {
       id: 'c' + now + '_' + who.id, caja: who, day: Live.dayKey(), from: list[0].at, to: now,
-      orders: t.orders, totalUSD: t.totalUSD, totalBs: t.totalBs, by: t.by, change: t.change, voids: t.voids, expected: t.expected, delivery: t.delivery,
+      orders: t.orders, totalUSD: t.totalUSD, totalBs: t.totalBs, by: t.by, change: t.change, voids: t.voids, expected: t.expected, delivery: t.delivery, tips: t.tips,
       counted: hasCount ? { usd: String(counted.usd).trim() === '' ? null : r2(num(counted.usd)), bs: String(counted.bs).trim() === '' ? null : r2(num(counted.bs)) } : null,
       saleIds: list.map(function (s) { return s.id; }),
       lines: list.filter(function (s) { return !s.void; }).slice(0, 300).map(function (s) {
@@ -365,6 +403,11 @@ return Delivery.setStatus(d.id, Store.config().kitchenEnabled !== false ? 'accep
         return row(x.label + ' (' + b.n + ')', x.cur === 'USD' ? usd(b.amt) : bs(b.amt));
       }).join('');
     if (c.change && (c.change.usd || c.change.bs)) h += row('Vuelto entregado', (c.change.usd ? '-' + usd(c.change.usd) : '') + (c.change.usd && c.change.bs ? ' ' : '') + (c.change.bs ? '-' + bs(c.change.bs) : ''));
+    if (c.tips && c.tips.usd > 0) {
+      h += '<div class="rc-hr"></div><div class="rc-b">PROPINAS (incluidas arriba)</div>' +
+        Object.keys(c.tips.byWaiter || {}).sort().map(function (k) { return row(esc(k), usd(c.tips.byWaiter[k])); }).join('') +
+        row('<b>Total propinas</b>', '<b>' + usd(c.tips.usd) + '</b>');
+    }
     h += '<div class="rc-hr"></div><div class="rc-b">EFECTIVO EN CAJA</div>' +
       row('Esperado $', usd(c.expected.usd)) + row('Esperado Bs', bs(c.expected.bs));
     if (c.counted) {
@@ -394,7 +437,7 @@ return Delivery.setStatus(d.id, Store.config().kitchenEnabled !== false ? 'accep
   function previewClosing() {
     var list = mySales(), t = totals(list), who = me();
     if (!list.length) { K.toast('No hay ventas para imprimir.'); return; }
-    printReceipt({ caja: who, from: list[0].at, to: Date.now(), delivery: t.delivery, orders: t.orders, totalUSD: t.totalUSD, totalBs: t.totalBs, by: t.by, change: t.change, expected: t.expected, voids: t.voids,
+    printReceipt({ caja: who, from: list[0].at, to: Date.now(), delivery: t.delivery, orders: t.orders, totalUSD: t.totalUSD, totalBs: t.totalBs, by: t.by, change: t.change, expected: t.expected, voids: t.voids, tips: t.tips,
       counted: (String(counted.usd).trim() !== '' || String(counted.bs).trim() !== '') ? { usd: String(counted.usd).trim() === '' ? null : r2(num(counted.usd)), bs: String(counted.bs).trim() === '' ? null : r2(num(counted.bs)) } : null }, true);
   }
 

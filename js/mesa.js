@@ -414,6 +414,9 @@
     var total = 0, dishes = 0;
     sent.forEach(function (i) { total += i.price * i.qty; dishes += i.qty; });
     var r = Store.rate().value;
+    var cfg = Store.config(), tipOn = cfg.tipEnabled !== false && sent.length > 0;
+    var tipOpts = (Array.isArray(cfg.tipOptions) && cfg.tipOptions.length ? cfg.tipOptions : [10, 15, 20]).map(Number).filter(function (n) { return n > 0 && n <= 100; }).slice(0, 4);
+    if (!tipOpts.length) tipOpts = [10, 15, 20];
 
     var node = ui.openSheet('<div class="sheet-pad">' + ui.closeBtn() +
       '<p class="eyebrow">' + esc(tableLabel(me.tableId)).toUpperCase() + '</p><h2>Pedir la cuenta</h2>' +
@@ -422,14 +425,45 @@
           '<div class="m-total"><span>Total de la mesa</span><span class="dual"><b>' + Store.fmtUSD(total) + '</b>' +
           (r > 0 ? '<small>' + Store.fmtBs(total * r) + '</small>' : '') + '</span></div>' +
           (drafts.length ? '<p class="m-warn">Tienes platos por enviar que no están incluidos en esta cuenta.</p>' : '') +
+          (tipOn ? '<div class="tip-box"><p class="tip-t">¿Quieres dejar propina' + (sess.waiter && sess.waiter.name ? ' para <b>' + esc(sess.waiter.name) + '</b>' : ' al mesero') + '?</p>' +
+            '<div class="tip-chips" id="tipChips"><button type="button" class="tip-chip on" data-tip="0">Sin propina</button>' +
+            tipOpts.map(function (p) { return '<button type="button" class="tip-chip" data-tip="' + p + '">' + p + '%</button>'; }).join('') +
+            '<button type="button" class="tip-chip" data-tip="other">Otro</button></div>' +
+            '<div class="tip-other" id="tipOther" hidden><input id="tipInp" type="text" inputmode="decimal" placeholder="Monto en $" autocomplete="off"></div>' +
+            '<div class="tip-sum" id="tipSum"></div></div>' : '') +
           '<button type="button" class="btn primary block lg" id="bConfirm">Pedir la cuenta</button>'
         : '<p class="m-empty">Todavía no han pedido nada, así que no hay cuenta que pedir.</p>') +
       '<button type="button" class="link-btn" data-close style="margin:10px auto 0;display:block">Volver</button></div>', { cls: 'narrow' });
 
+    /* propina: elegir un porcentaje, o escribir un monto */
+    var tipPct = 0, tipOther = false;
+    function tipUsd() {
+      if (tipOther) { var v = parseFloat(String(($('#tipInp', node) || {}).value || '').replace(',', '.')); return isNaN(v) || v < 0 ? 0 : Math.round(v * 100) / 100; }
+      return Math.round(total * tipPct) / 100;
+    }
+    function paintTip() {
+      var el = $('#tipSum', node); if (!el) return;
+      var t = tipUsd();
+      el.innerHTML = t > 0 ? '<span>Propina</span><b>' + Store.fmtUSD(t) + '</b><span>Total con propina</span><b>' + Store.fmtUSD(total + t) + (r > 0 ? ' · ' + Store.fmtBs((total + t) * r) : '') + '</b>' : '';
+    }
+    var chips = $('#tipChips', node);
+    if (chips) {
+      chips.addEventListener('click', function (e) {
+        var b = e.target.closest('[data-tip]'); if (!b) return;
+        [].forEach.call(chips.querySelectorAll('.tip-chip'), function (x) { x.classList.toggle('on', x === b); });
+        tipOther = b.dataset.tip === 'other'; tipPct = tipOther ? 0 : Number(b.dataset.tip) || 0;
+        $('#tipOther', node).hidden = !tipOther;
+        if (tipOther) $('#tipInp', node).focus();
+        paintTip();
+      });
+      $('#tipInp', node).addEventListener('input', paintTip);
+    }
+
     var ok = document.getElementById('bConfirm');
     if (ok) ok.addEventListener('click', function () {
       ok.disabled = true;
-      Live.requestBill(me.tableId, me.pid).then(function () {
+      var tip = tipOn ? (tipOther ? { usd: tipUsd() } : { pct: tipPct }) : null;
+      Live.requestBill(me.tableId, me.pid, tip).then(function () {
         ui.closeSheet();
         ui.toast('Cuenta solicitada · el mesero se acerca');
       });

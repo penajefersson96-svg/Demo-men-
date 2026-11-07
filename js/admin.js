@@ -439,6 +439,8 @@
       inp('nIg', 'Instagram', c.instagram, 'placeholder="usuario"') + inp('nTt', 'TikTok', c.tiktok, 'placeholder="usuario"') + inp('nFb', 'Facebook', c.facebook, 'placeholder="página o enlace"') + '</div>' +
       '<div class="panel"><h3>Reseñas en Google</h3><p class="help">Si pones aquí el enlace de reseñas de tu local en Google, el menú muestra el botón «⭐ Déjanos tu reseña» y el cliente cae directo en la ventana para escribirla (debe iniciar sesión con su cuenta de Google). La reseña queda publicada en Google Maps.</p>' +
       inp('nRev', 'Enlace para reseñas de Google', c.reviewUrl || '', 'placeholder="https://search.google.com/local/writereview?placeid=..." inputmode="url" autocapitalize="none"') + '</div>' +
+      '<div class="panel"><h3>Propina</h3><label class="check"><input type="checkbox" id="nTipOn" ' + (c.tipEnabled === false ? '' : 'checked') + '> Ofrecer propina al cliente al pedir la cuenta (y en la caja al cobrar)</label>' +
+      '<div class="f" style="margin-top:10px"><label for="nTipOpts">Porcentajes a mostrar</label><input id="nTipOpts" type="text" value="' + esc((Array.isArray(c.tipOptions) && c.tipOptions.length ? c.tipOptions : [10, 15, 20]).join(', ')) + '" placeholder="10, 15, 20"><small class="h">Hasta 4 números separados por coma. Siempre habrá «Sin propina» y «Otro monto». Al cerrar la caja ves cuánta propina le toca a cada mesero.</small></div></div>' +
       '<div class="actions end"><button class="btn primary lg" type="submit" style="padding:0 28px">Guardar cambios</button></div></form>';
 
     const logo = photoField($('#logoF'), c.logo === 'img/logo.svg' ? '' : c.logo);
@@ -454,7 +456,9 @@
           phone: $('#nPhone').value.trim(), whatsapp: $('#nWa').value.replace(/\D/g, ''), whatsappMessage: $('#nMsg').value.trim() || 'Hola, quiero hacer un pedido:',
           deliveryFee: Math.max(0, fee), paymentMethods: $('#nPay').value.split('\n').map(s => s.trim()).filter(Boolean),
           instagram: $('#nIg').value.trim(), tiktok: $('#nTt').value.trim(), facebook: $('#nFb').value.trim(),
-          reviewUrl: /^https:\/\//i.test($('#nRev').value.trim()) ? $('#nRev').value.trim() : ''
+          reviewUrl: /^https:\/\//i.test($('#nRev').value.trim()) ? $('#nRev').value.trim() : '',
+          tipEnabled: $('#nTipOn').checked,
+          tipOptions: ($('#nTipOpts').value.match(/\d+([.,]\d+)?/g) || []).map(function (x) { return Number(x.replace(',', '.')); }).filter(function (n) { return n > 0 && n <= 100; }).slice(0, 4)
         });
       }).then(() => { $('.a-head h1 small').textContent = name; });
     };

@@ -216,10 +216,14 @@
         s.calls.waiter = { at: Date.now(), by: s.people[pid].name }; return true;
       });
     },
-    requestBill: function (tableId, pid) {
+    /* tip (opcional) = { pct: 10 } o { usd: 3.5 }: la propina que el cliente quiere dejar; la caja la confirma al cobrar */
+    requestBill: function (tableId, pid, tip) {
       return mutate(tableId, function (s) {
         if (!s.people[pid]) return false;
-        s.calls.bill = { at: Date.now(), by: s.people[pid].name }; s.status = 'bill_requested'; return true;
+        var b = { at: Date.now(), by: s.people[pid].name };
+        if (tip && tip.pct > 0) b.tip = { pct: Math.min(100, Math.round(tip.pct * 100) / 100) };
+        else if (tip && tip.usd > 0) b.tip = { usd: Math.min(10000, Math.round(tip.usd * 100) / 100) };
+        s.calls.bill = b; s.status = 'bill_requested'; return true;
       });
     },
 

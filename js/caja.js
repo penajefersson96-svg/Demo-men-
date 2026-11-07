@@ -249,6 +249,8 @@
     c.bills.forEach(function (o) {
       html += '<section class="cj-card bill"><header><h3>🧾 ' + esc(tableLabel(o.tid)) + ' pidió la cuenta</h3><span class="cj-ago">' + ago(o.at) + '</span></header>' +
         '<div class="cj-total">' + usdBs(tableTotal(o.s)) + '</div>' + waiterChip(o.s) +
+        (o.s.calls.bill.tip ? '<p class="cj-hint" style="color:#7a4b00"><b>🙌 Propina elegida por el cliente: ' +
+          (o.s.calls.bill.tip.pct ? o.s.calls.bill.tip.pct + ' %' : Store.fmtUSD(o.s.calls.bill.tip.usd)) + '</b> (se suma al cobrar)</p>' : '') +
         '<p class="cj-hint">Avisa al mesero para llevar la cuenta. Cuando paguen, registra el cobro.</p>' +
         '<div class="cj-actions"><button type="button" class="cj-btn primary" data-a="pay" data-t="' + esc(o.tid) + '">💵 Cobrar</button>' +
         '<button type="button" class="cj-btn" data-a="cancel-bill" data-t="' + esc(o.tid) + '">Cancelar solicitud</button></div></section>';
