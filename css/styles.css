@@ -129,6 +129,10 @@ h1, h2, h3 { margin: 0; line-height: 1.15; }
 .hero.has-bg .slogan { color: rgba(255, 255, 255, .88); text-shadow: 0 1px 8px rgba(0, 0, 0, .45); }
 .hero.has-bg .meta-link { color: rgba(255, 255, 255, .9); text-shadow: 0 1px 8px rgba(0, 0, 0, .5); }
 .hero.has-bg .meta-link svg { color: #ffb48a; }
+.hero.has-bg .social { color: var(--ink); text-shadow: none; }
+.hero.has-bg .social:hover { color: var(--brand-dark); }
+.hero.has-bg .chip-static { color: var(--muted); text-shadow: none; }
+.hero.has-bg .status { text-shadow: none; }
 .hero.has-bg .hero-logo { box-shadow: 0 8px 28px rgba(0, 0, 0, .45); }
 
 .hero-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 16px; }
