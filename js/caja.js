@@ -335,6 +335,8 @@
         '<button type="button" class="cj-btn sm primary" data-a="shift-repeat">Repetir turno de ayer</button></div>';
     }
 
+    if (window.CajaCierre && CajaCierre.tipsCard) html += CajaCierre.tipsCard();
+
     html += '<section class="cj-card"><header><h3>Meseros de hoy</h3></header>' +
       '<p class="cj-hint">Se asignan <b>por orden</b>: la primera mesa que pida recibe al #1, la siguiente al #2, y así en rotación. El mesero se queda con la mesa hasta que se libere.</p>';
     if (!list.length) html += '<p class="cj-by">Todavía no hay meseros en el turno.</p>';

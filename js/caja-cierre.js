@@ -258,6 +258,16 @@
     }).join('');
   }
 
+  /* propina acumulada por mesero desde el último cierre (para la pestaña «Turno de hoy») */
+  function tipsCard() {
+    var t = totals(mySales());
+    if (!(t.tips.usd > 0)) return '<section class="cj-card"><header><h3>🙌 Propinas de hoy</h3></header><p class="cj-by">Todavía no hay propinas cobradas.</p></section>';
+    return '<section class="cj-card"><header><h3>🙌 Propinas de hoy</h3><span class="cj-pill ok">' + usd(t.tips.usd) + '</span></header>' +
+      '<table class="cc-t"><tbody>' +
+      Object.keys(t.tips.byWaiter).sort().map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="r"><b>' + usd(t.tips.byWaiter[k]) + '</b></td></tr>'; }).join('') +
+      '</tbody></table><p class="cj-hint">Lo que han recibido los meseros desde el último cierre de caja. Ya está incluido en lo cobrado: sepáralo y entrégale a cada uno lo suyo.</p></section>';
+  }
+
   function html() {
     var who = me(), list = mySales(), t = totals(list);
     var pendingBills = Object.keys(K.sessions()).filter(function (k) { var s = K.sessions()[k]; return s.calls && s.calls.bill; }).length;
@@ -403,11 +413,6 @@
         return row(x.label + ' (' + b.n + ')', x.cur === 'USD' ? usd(b.amt) : bs(b.amt));
       }).join('');
     if (c.change && (c.change.usd || c.change.bs)) h += row('Vuelto entregado', (c.change.usd ? '-' + usd(c.change.usd) : '') + (c.change.usd && c.change.bs ? ' ' : '') + (c.change.bs ? '-' + bs(c.change.bs) : ''));
-    if (c.tips && c.tips.usd > 0) {
-      h += '<div class="rc-hr"></div><div class="rc-b">PROPINAS (incluidas arriba)</div>' +
-        Object.keys(c.tips.byWaiter || {}).sort().map(function (k) { return row(esc(k), usd(c.tips.byWaiter[k])); }).join('') +
-        row('<b>Total propinas</b>', '<b>' + usd(c.tips.usd) + '</b>');
-    }
     h += '<div class="rc-hr"></div><div class="rc-b">EFECTIVO EN CAJA</div>' +
       row('Esperado $', usd(c.expected.usd)) + row('Esperado Bs', bs(c.expected.bs));
     if (c.counted) {
@@ -464,5 +469,5 @@
     return false;
   }
 
-  window.CajaCierre = { start: start, html: html, after: updateDiffs, openPay: openPay, payDelivery: payDelivery, onAction: onAction, _totals: totals };
+  window.CajaCierre = { start: start, html: html, tipsCard: tipsCard, after: updateDiffs, openPay: openPay, payDelivery: payDelivery, onAction: onAction, _totals: totals };
 })();
