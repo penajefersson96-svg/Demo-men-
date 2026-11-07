@@ -191,7 +191,14 @@
       if (!email) return fail('Escribe tu correo o usuario.');
       /* si el administrador le cambió la clave, su acceso quedó en una cuenta nueva (colección «logins») */
       var mapP = DB.get('logins', normUser(user)).then(function (d) { return (d && d.email) || email; }).catch(function () { return email; });
-      return wrap(mapP.then(function (em) { return auth.signInWithEmailAndPassword(em, String(pass || '')); }).then(loadSession).then(function (s) {
+      var BAD = /invalid-credential|wrong-password|user-not-found|invalid-login/;
+      return wrap(mapP.then(function (em) {
+        return auth.signInWithEmailAndPassword(em, String(pass || '')).catch(function (e) {
+          /* si el acceso apunta a una cuenta nueva y la clave no sirve ahí, prueba con la cuenta original (ej: clave recuperada por correo) */
+          if (em !== email && BAD.test((e && e.code) || '')) return auth.signInWithEmailAndPassword(email, String(pass || ''));
+          throw e;
+        });
+      }).then(loadSession).then(function (s) {
         if (!s) return backToGuest().then(function () { throw new Error('Este usuario no tiene acceso al sistema. Pídele al administrador que lo agregue.'); });
         if (roles && roles.indexOf(s.role) < 0 && s.role !== 'admin') {
           return backToGuest().then(function () { throw new Error('Este usuario no tiene permiso para esta pantalla.'); });
@@ -201,6 +208,21 @@
     },
 
     logout: function () { sess = null; return auth.signOut().catch(function () {}); },
+
+    /* «¿Olvidaste tu clave?»: Firebase envía un correo con un enlace para crear una clave nueva.
+       Solo sirve con un correo real (el del administrador). Los usuarios cortos (caja, cocina…) no tienen bandeja:
+       el administrador les pone una clave nueva en Equipo → Editar. */
+    resetPassword: function (user) {
+      var u = normUser(user);
+      if (!u) return fail('Escribe tu correo.');
+      if (u.indexOf('@') < 1 || u.slice(-(DOMAIN.length + 1)) === '@' + DOMAIN) {
+        return fail('Este usuario no tiene un correo real. Pídele al administrador que te ponga una clave nueva (Equipo → Editar). Si eres el administrador, escribe tu correo.');
+      }
+      return wrap(auth.sendPasswordResetEmail(u).catch(function (e) {
+        if (/user-not-found/.test((e && e.code) || '')) return null;      // no se revela si el correo existe
+        throw e;
+      }).then(function () { return 'Si ese correo tiene cuenta, te enviamos un enlace para crear una clave nueva. Revisa también la carpeta de spam.'; }));
+    },
 
     changeCredentials: function (o) {
       var u = auth.currentUser;

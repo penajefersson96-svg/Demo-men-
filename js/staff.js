@@ -42,6 +42,8 @@
           '<button type="button" id="lShow" class="link-btn" aria-label="Mostrar u ocultar la clave">Ver</button></div>' +
         '<p class="login-err" id="lErr" role="alert"></p>' +
         '<button class="btn primary block lg" type="submit" id="lBtn">Entrar</button>' +
+        (Auth.resetPassword ? '<p style="text-align:center;margin:14px 0 0"><button type="button" class="link-btn" id="lForgot">¿Olvidaste tu clave?</button></p>' : '') +
+        (/^\d{8,15}$/.test(String(window.SUPPORT_WHATSAPP || '')) ? '<p style="text-align:center;margin:10px 0 0;font-size:14px;color:var(--muted)">¿Problemas para entrar? <a href="https://wa.me/' + window.SUPPORT_WHATSAPP + '" target="_blank" rel="noopener">Escribe a soporte</a></p>' : '') +
         demo +
         '<p id="lFirst"></p>' +
       '</form></div>';
@@ -52,6 +54,16 @@
       var i = document.getElementById('lPass');
       i.type = i.type === 'password' ? 'text' : 'password';
       this.textContent = i.type === 'password' ? 'Ver' : 'Ocultar';
+    });
+    var forgot = document.getElementById('lForgot');
+    if (forgot) forgot.addEventListener('click', function () {
+      var u = f.user.value.trim();
+      err.style.color = '';
+      if (!u) { err.textContent = 'Escribe arriba tu correo y vuelve a tocar «¿Olvidaste tu clave?».'; f.user.focus(); return; }
+      forgot.disabled = true;
+      Auth.resetPassword(u).then(function (msg) { err.style.color = '#2e7d32'; err.textContent = msg; })
+        .catch(function (ex) { err.style.color = ''; err.textContent = ex.message || 'No se pudo enviar el correo.'; })
+        .then(function () { forgot.disabled = false; });
     });
     // Firebase, primera vez: ofrece crear al administrador
     if (DB.mode === 'firebase' && o.roles.indexOf('admin') >= 0 && Auth.firstRun) {
@@ -64,7 +76,7 @@
     }
     f.addEventListener('submit', function (e) {
       e.preventDefault();
-      err.textContent = ''; btn.disabled = true; btn.textContent = 'Entrando…';
+      err.textContent = ''; err.style.color = ''; btn.disabled = true; btn.textContent = 'Entrando…';
       Auth.login(f.user.value, f.pass.value, o.roles).then(function (s) {
         o.onReady(s);
       }).catch(function (ex) {
